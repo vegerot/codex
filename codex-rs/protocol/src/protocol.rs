@@ -242,18 +242,9 @@ pub enum Op {
         /// Optional JSON Schema used to constrain the final assistant message for this turn.
         #[serde(skip_serializing_if = "Option::is_none")]
         final_output_json_schema: Option<Value>,
-    },
-
-    /// App-server user input carrying turn-scoped Responses API client metadata.
-    UserInputWithClientMetadata {
-        /// User input items, see `InputItem`
-        items: Vec<UserInput>,
-        /// Optional JSON Schema used to constrain the final assistant message for this turn.
-        #[serde(skip_serializing_if = "Option::is_none")]
-        final_output_json_schema: Option<Value>,
         /// Optional turn-scoped Responses API `client_metadata`.
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        client_metadata: Option<HashMap<String, String>>,
+        responsesapi_client_metadata: Option<HashMap<String, String>>,
     },
 
     /// Similar to [`Op::UserInput`], but contains additional context required
@@ -527,6 +518,7 @@ impl From<Vec<UserInput>> for Op {
         Op::UserInput {
             items: value,
             final_output_json_schema: None,
+            responsesapi_client_metadata: None,
         }
     }
 }
@@ -591,7 +583,6 @@ impl Op {
             Self::RealtimeConversationText(_) => "realtime_conversation_text",
             Self::RealtimeConversationClose => "realtime_conversation_close",
             Self::UserInput { .. } => "user_input",
-            Self::UserInputWithClientMetadata { .. } => "user_input_with_client_metadata",
             Self::UserTurn { .. } => "user_turn",
             Self::InterAgentCommunication { .. } => "inter_agent_communication",
             Self::OverrideTurnContext { .. } => "override_turn_context",
@@ -4455,6 +4446,7 @@ mod tests {
         let op = Op::UserInput {
             items: Vec::new(),
             final_output_json_schema: None,
+            responsesapi_client_metadata: None,
         };
 
         let json_op = serde_json::to_value(op)?;
@@ -4472,6 +4464,7 @@ mod tests {
             Op::UserInput {
                 items: Vec::new(),
                 final_output_json_schema: None,
+                responsesapi_client_metadata: None,
             }
         );
 
@@ -4491,6 +4484,7 @@ mod tests {
         let op = Op::UserInput {
             items: Vec::new(),
             final_output_json_schema: Some(schema.clone()),
+            responsesapi_client_metadata: None,
         };
 
         let json_op = serde_json::to_value(op)?;
@@ -4507,11 +4501,11 @@ mod tests {
     }
 
     #[test]
-    fn user_input_with_client_metadata_round_trips() -> Result<()> {
-        let op = Op::UserInputWithClientMetadata {
+    fn user_input_with_responsesapi_client_metadata_round_trips() -> Result<()> {
+        let op = Op::UserInput {
             items: Vec::new(),
             final_output_json_schema: None,
-            client_metadata: Some(HashMap::from([(
+            responsesapi_client_metadata: Some(HashMap::from([(
                 "fiber_run_id".to_string(),
                 "fiber-123".to_string(),
             )])),
@@ -4521,9 +4515,9 @@ mod tests {
         assert_eq!(
             json_op,
             json!({
-                "type": "user_input_with_client_metadata",
+                "type": "user_input",
                 "items": [],
-                "client_metadata": {
+                "responsesapi_client_metadata": {
                     "fiber_run_id": "fiber-123",
                 }
             })

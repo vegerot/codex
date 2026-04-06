@@ -758,10 +758,10 @@ impl Codex {
         &self,
         input: Vec<UserInput>,
         expected_turn_id: Option<&str>,
-        client_metadata: Option<HashMap<String, String>>,
+        responsesapi_client_metadata: Option<HashMap<String, String>>,
     ) -> Result<String, SteerInputError> {
         self.session
-            .steer_input(input, expected_turn_id, client_metadata)
+            .steer_input(input, expected_turn_id, responsesapi_client_metadata)
             .await
     }
 
@@ -2176,6 +2176,7 @@ impl Session {
                     text_elements: Vec::new(),
                 }],
                 final_output_json_schema: None,
+                responsesapi_client_metadata: None,
             },
         )
         .await;
@@ -4038,7 +4039,7 @@ impl Session {
         &self,
         input: Vec<UserInput>,
         expected_turn_id: Option<&str>,
-        client_metadata: Option<HashMap<String, String>>,
+        responsesapi_client_metadata: Option<HashMap<String, String>>,
     ) -> Result<String, SteerInputError> {
         if input.is_empty() {
             return Err(SteerInputError::EmptyInput);
@@ -4077,13 +4078,13 @@ impl Session {
             None => return Err(SteerInputError::NoActiveTurn(input)),
         }
 
-        if let Some(client_metadata) = client_metadata
+        if let Some(responsesapi_client_metadata) = responsesapi_client_metadata
             && let Some((_, active_task)) = active_turn.tasks.first()
         {
             active_task
                 .turn_context
                 .turn_metadata_state
-                .set_client_metadata(client_metadata);
+                .set_responsesapi_client_metadata(responsesapi_client_metadata);
         }
 
         let mut turn_state = active_turn.turn_state.lock().await;
@@ -4593,9 +4594,7 @@ async fn submission_loop(sess: Arc<Session>, config: Arc<Config>, rx_sub: Receiv
                     .await;
                     false
                 }
-                Op::UserInput { .. }
-                | Op::UserInputWithClientMetadata { .. }
-                | Op::UserTurn { .. } => {
+                Op::UserInput { .. } | Op::UserTurn { .. } => {
                     handlers::user_input_or_turn(&sess, sub.id.clone(), sub.op).await;
                     false
                 }
@@ -4839,7 +4838,7 @@ mod handlers {
     }
 
     pub async fn user_input_or_turn(sess: &Arc<Session>, sub_id: String, op: Op) {
-        let (items, updates, client_metadata) = match op {
+        let (items, updates, responsesapi_client_metadata) = match op {
             Op::UserTurn {
                 cwd,
                 approval_policy,
@@ -4886,25 +4885,14 @@ mod handlers {
             Op::UserInput {
                 items,
                 final_output_json_schema,
+                responsesapi_client_metadata,
             } => (
                 items,
                 SessionSettingsUpdate {
                     final_output_json_schema: Some(final_output_json_schema),
                     ..Default::default()
                 },
-                None,
-            ),
-            Op::UserInputWithClientMetadata {
-                items,
-                final_output_json_schema,
-                client_metadata,
-            } => (
-                items,
-                SessionSettingsUpdate {
-                    final_output_json_schema: Some(final_output_json_schema),
-                    ..Default::default()
-                },
-                client_metadata,
+                responsesapi_client_metadata,
             ),
             _ => unreachable!(),
         };
@@ -4919,16 +4907,16 @@ mod handlers {
             .steer_input(
                 items.clone(),
                 /*expected_turn_id*/ None,
-                client_metadata.clone(),
+                responsesapi_client_metadata.clone(),
             )
             .await
         {
             Ok(_) => current_context.session_telemetry.user_prompt(&items),
             Err(SteerInputError::NoActiveTurn(items)) => {
-                if let Some(client_metadata) = client_metadata {
+                if let Some(responsesapi_client_metadata) = responsesapi_client_metadata {
                     current_context
                         .turn_metadata_state
-                        .set_client_metadata(client_metadata);
+                        .set_responsesapi_client_metadata(responsesapi_client_metadata);
                 }
                 current_context.session_telemetry.user_prompt(&items);
                 sess.refresh_mcp_servers_if_requested(&current_context)

@@ -1186,6 +1186,7 @@ async fn fork_startup_context_then_first_turn_diff_snapshot() -> anyhow::Result<
                 text_elements: Vec::new(),
             }],
             final_output_json_schema: None,
+            responsesapi_client_metadata: None,
         })
         .await?;
     wait_for_event(&initial.codex, |ev| matches!(ev, EventMsg::TurnComplete(_))).await;
@@ -1241,6 +1242,7 @@ async fn fork_startup_context_then_first_turn_diff_snapshot() -> anyhow::Result<
                 text_elements: Vec::new(),
             }],
             final_output_json_schema: None,
+            responsesapi_client_metadata: None,
         })
         .await?;
     wait_for_event(&forked.thread, |ev| matches!(ev, EventMsg::TurnComplete(_))).await;
@@ -3104,6 +3106,7 @@ fn op_kind_distinguishes_turn_ops() {
         Op::UserInput {
             items: vec![],
             final_output_json_schema: None,
+            responsesapi_client_metadata: None,
         }
         .kind(),
         "user_input"
@@ -4937,6 +4940,7 @@ async fn steered_input_reopens_mailbox_delivery_for_current_turn() {
             text_elements: Vec::new(),
         }],
         Some(&tc.sub_id),
+        None,
     )
     .await
     .expect("steered input should be accepted");
@@ -4981,6 +4985,7 @@ async fn stale_defer_mailbox_delivery_does_not_override_steered_input() {
             text_elements: Vec::new(),
         }],
         Some(&tc.sub_id),
+        None,
     )
     .await
     .expect("steered input should be accepted");
