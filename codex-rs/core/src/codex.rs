@@ -5585,7 +5585,6 @@ mod handlers {
         if !shutdown_failures.is_empty() {
             sess.shutdown_failure
                 .send_replace(Some(shutdown_failures.join("; ")));
-            return true;
         }
 
         let event = Event {
