@@ -111,25 +111,6 @@ pub async fn find_thread_names_by_ids(
     Ok(names)
 }
 
-/// Find the most recently updated thread id for a thread name, if any.
-pub async fn find_thread_id_by_name(
-    codex_home: &Path,
-    name: &str,
-) -> std::io::Result<Option<ThreadId>> {
-    if name.trim().is_empty() {
-        return Ok(None);
-    }
-    let path = session_index_path(codex_home);
-    if !path.exists() {
-        return Ok(None);
-    }
-    let name = name.to_string();
-    let entry = tokio::task::spawn_blocking(move || scan_index_from_end_by_name(&path, &name))
-        .await
-        .map_err(std::io::Error::other)??;
-    Ok(entry.map(|entry| entry.id))
-}
-
 /// Locate a recorded thread rollout file by thread name using newest-first ordering.
 /// Returns `Ok(Some(path))` if found, `Ok(None)` if not present.
 pub async fn find_thread_path_by_name_str(
@@ -143,23 +124,26 @@ pub async fn find_thread_path_by_name_str(
     if !path.exists() {
         return Ok(None);
     }
+    let (tx, mut rx) = tokio::sync::mpsc::channel(1);
     let name = name.to_string();
-    // Collect all matching thread ids newest-first instead of stopping at the first name hit:
-    // the newest entry may point at a thread whose rollout was never materialized.
-    let thread_ids =
-        tokio::task::spawn_blocking(move || collect_thread_ids_from_end_by_name(&path, &name))
-            .await
-            .map_err(std::io::Error::other)??;
+    // Stream matching ids newest-first instead of stopping at the first name hit: the newest entry
+    // may point at a thread whose rollout was never materialized.
+    let scan =
+        tokio::task::spawn_blocking(move || stream_thread_ids_from_end_by_name(&path, &name, tx));
 
-    for thread_id in thread_ids {
-        // Keep walking until a matching id resolves to an existing rollout so an unsaved rename
-        // cannot shadow an older persisted session with the same name.
+    while let Some(thread_id) = rx.recv().await {
+        // Keep walking until a matching id resolves to a loadable rollout so an unsaved or partial
+        // rename cannot shadow an older persisted session with the same name.
         if let Some(path) =
             super::list::find_thread_path_by_id_str(codex_home, &thread_id.to_string()).await?
+            && super::list::read_session_meta_line(&path).await.is_ok()
         {
+            drop(rx);
+            scan.await.map_err(std::io::Error::other)??;
             return Ok(Some(path));
         }
     }
+    scan.await.map_err(std::io::Error::other)??;
 
     Ok(None)
 }
@@ -175,25 +159,23 @@ fn scan_index_from_end_by_id(
     scan_index_from_end(path, |entry| entry.id == *thread_id)
 }
 
-fn scan_index_from_end_by_name(
+fn stream_thread_ids_from_end_by_name(
     path: &Path,
     name: &str,
-) -> std::io::Result<Option<SessionIndexEntry>> {
-    scan_index_from_end(path, |entry| entry.thread_name == name)
-}
-
-fn collect_thread_ids_from_end_by_name(path: &Path, name: &str) -> std::io::Result<Vec<ThreadId>> {
+    tx: tokio::sync::mpsc::Sender<ThreadId>,
+) -> std::io::Result<()> {
     let mut seen = HashSet::new();
-    let mut ids = Vec::new();
     scan_index_from_end_for_each(path, |entry| {
         // The first row seen for an id is its latest name. Ignore older rows for that id so a
         // historical name cannot be treated as the current one after the thread is renamed.
         if seen.insert(entry.id) && entry.thread_name == name {
-            ids.push(entry.id);
+            if tx.blocking_send(entry.id).is_err() {
+                return Ok(Some(entry.clone()));
+            }
         }
         Ok(None)
     })?;
-    Ok(ids)
+    Ok(())
 }
 
 fn scan_index_from_end<F>(
