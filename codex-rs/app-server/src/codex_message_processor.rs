@@ -1912,6 +1912,7 @@ impl CodexMessageProcessor {
         let exec_params = ExecParams {
             command,
             cwd: cwd.clone(),
+            stdin: None,
             expiration,
             capture_policy,
             env,

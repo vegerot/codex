@@ -97,6 +97,7 @@ impl ShellHandler {
         ExecParams {
             command: params.command.clone(),
             cwd: turn_context.resolve_path(params.workdir.clone()),
+            stdin: None,
             expiration: params.timeout_ms.into(),
             capture_policy: ExecCapturePolicy::ShellTool,
             env: create_env(&turn_context.shell_environment_policy, Some(thread_id)),
@@ -152,6 +153,7 @@ impl ShellCommandHandler {
         Ok(ExecParams {
             command,
             cwd: turn_context.resolve_path(params.workdir.clone()),
+            stdin: None,
             expiration: params.timeout_ms.into(),
             capture_policy: ExecCapturePolicy::ShellTool,
             env: create_env(&turn_context.shell_environment_policy, Some(thread_id)),

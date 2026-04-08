@@ -83,6 +83,7 @@ pub const IO_DRAIN_TIMEOUT_MS: u64 = 2_000; // 2 s should be plenty for local pi
 pub struct ExecParams {
     pub command: Vec<String>,
     pub cwd: PathBuf,
+    pub stdin: Option<Vec<u8>>,
     pub expiration: ExecExpiration,
     pub capture_policy: ExecCapturePolicy,
     pub env: HashMap<String, String>,
@@ -252,6 +253,7 @@ pub fn build_exec_request(
         command,
         cwd,
         mut env,
+        stdin,
         expiration,
         capture_policy,
         network,
@@ -278,6 +280,7 @@ pub fn build_exec_request(
         cwd,
         env,
         additional_permissions: None,
+        stdin,
     };
     let options = ExecOptions {
         expiration,
@@ -322,6 +325,7 @@ pub(crate) async fn execute_exec_request(
         command,
         cwd,
         env,
+        stdin,
         network,
         expiration,
         capture_policy,
@@ -338,6 +342,7 @@ pub(crate) async fn execute_exec_request(
     let params = ExecParams {
         command,
         cwd,
+        stdin,
         expiration,
         capture_policy,
         env,
@@ -445,6 +450,7 @@ async fn exec_windows_sandbox(
         command,
         cwd,
         mut env,
+        stdin,
         network,
         expiration,
         capture_policy,
@@ -501,6 +507,7 @@ async fn exec_windows_sandbox(
                     command,
                     cwd: &cwd,
                     env_map: env,
+                    stdin,
                     timeout_ms,
                     use_private_desktop: windows_sandbox_private_desktop,
                     proxy_enforced,
@@ -514,6 +521,7 @@ async fn exec_windows_sandbox(
                 command,
                 &cwd,
                 env,
+                stdin,
                 timeout_ms,
                 &additional_deny_write_paths,
                 windows_sandbox_private_desktop,
@@ -782,6 +790,7 @@ async fn exec(
         command,
         cwd,
         mut env,
+        stdin,
         network,
         arg0,
         expiration,
@@ -812,6 +821,7 @@ async fn exec(
         network: None,
         stdio_policy: StdioPolicy::RedirectForShellTool,
         env,
+        stdin,
     })
     .await?;
     if let Some(after_spawn) = after_spawn {

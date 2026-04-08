@@ -123,6 +123,7 @@ pub(super) async fn try_run_zsh_fork(
         command,
         cwd: sandbox_cwd,
         env: sandbox_env,
+        stdin: _stdin,
         network: sandbox_network,
         expiration: _sandbox_expiration,
         capture_policy: _capture_policy,
@@ -706,6 +707,7 @@ impl ShellCommandExecutor for CoreShellCommandExecutor {
                 command: self.command.clone(),
                 cwd: self.cwd.clone(),
                 env: exec_env,
+                stdin: None,
                 network: self.network.clone(),
                 expiration: ExecExpiration::Cancellation(cancel_rx),
                 capture_policy: ExecCapturePolicy::ShellTool,
@@ -830,6 +832,7 @@ impl CoreShellCommandExecutor {
             cwd: workdir.to_path_buf(),
             env,
             additional_permissions,
+            stdin: None,
         };
         let options = ExecOptions {
             expiration: ExecExpiration::DefaultTimeout,

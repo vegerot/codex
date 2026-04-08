@@ -1053,6 +1053,7 @@ impl JsReplManager {
             cwd: turn.cwd.to_path_buf(),
             env,
             additional_permissions: None,
+            stdin: None,
         };
         let options = ExecOptions {
             expiration: ExecExpiration::DefaultTimeout,
