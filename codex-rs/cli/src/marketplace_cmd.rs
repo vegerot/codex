@@ -349,7 +349,7 @@ pub(super) fn clone_git_source(
 ) -> Result<()> {
     let destination = destination.to_string_lossy().to_string();
     if sparse_paths.is_empty() {
-        run_git(&["clone", url, destination.as_str()], None)?;
+        run_git(&["clone", url, destination.as_str()], /*cwd*/ None)?;
         if let Some(ref_name) = ref_name {
             run_git(&["checkout", ref_name], Some(Path::new(&destination)))?;
         }
@@ -364,7 +364,7 @@ pub(super) fn clone_git_source(
             url,
             destination.as_str(),
         ],
-        None,
+        /*cwd*/ None,
     )?;
     let mut sparse_args = vec!["sparse-checkout", "set"];
     sparse_args.extend(sparse_paths.iter().map(String::as_str));
@@ -550,7 +550,7 @@ mod tests {
     #[test]
     fn github_shorthand_parses_ref_suffix() {
         assert_eq!(
-            parse_marketplace_source("owner/repo@main", /* explicit_ref */ None).unwrap(),
+            parse_marketplace_source("owner/repo@main", /*explicit_ref*/ None).unwrap(),
             MarketplaceSource::Git {
                 url: "https://github.com/owner/repo.git".to_string(),
                 ref_name: Some("main".to_string()),
@@ -564,7 +564,7 @@ mod tests {
         assert_eq!(
             parse_marketplace_source(
                 "https://example.com/team/repo.git#v1",
-                /* explicit_ref */ None,
+                /*explicit_ref*/ None,
             )
             .unwrap(),
             MarketplaceSource::Git {
@@ -580,7 +580,7 @@ mod tests {
         assert_eq!(
             parse_marketplace_source(
                 "owner/repo@main",
-                /* explicit_ref */ Some("release".to_string()),
+                /*explicit_ref*/ Some("release".to_string()),
             )
             .unwrap(),
             MarketplaceSource::Git {
@@ -593,10 +593,10 @@ mod tests {
 
     #[test]
     fn github_shorthand_and_git_url_have_different_source_ids() {
-        let shorthand = parse_marketplace_source("owner/repo", /* explicit_ref */ None).unwrap();
+        let shorthand = parse_marketplace_source("owner/repo", /*explicit_ref*/ None).unwrap();
         let git_url = parse_marketplace_source(
             "https://github.com/owner/repo.git",
-            /* explicit_ref */ None,
+            /*explicit_ref*/ None,
         )
         .unwrap();
 
