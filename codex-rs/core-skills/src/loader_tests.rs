@@ -828,7 +828,7 @@ async fn loads_skills_via_symlinked_subdir_for_user_scope() {
 
 #[tokio::test]
 #[cfg(unix)]
-async fn ignores_symlinked_skill_file_for_user_scope() {
+async fn loads_symlinked_skill_file_for_user_scope() {
     let codex_home = tempfile::tempdir().expect("tempdir");
     let shared = tempfile::tempdir().expect("tempdir");
 
@@ -846,7 +846,19 @@ async fn ignores_symlinked_skill_file_for_user_scope() {
         "unexpected errors: {:?}",
         outcome.errors
     );
-    assert_eq!(outcome.skills, Vec::new());
+    assert_eq!(
+        outcome.skills,
+        vec![SkillMetadata {
+            name: "linked-file-skill".to_string(),
+            description: "from link".to_string(),
+            short_description: None,
+            interface: None,
+            dependencies: None,
+            policy: None,
+            path_to_skills_md: normalized(&shared_skill_path),
+            scope: SkillScope::User,
+        }]
+    );
 }
 
 #[tokio::test]

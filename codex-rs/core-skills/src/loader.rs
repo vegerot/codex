@@ -448,6 +448,23 @@ fn discover_skills_under_root(root: &Path, scope: SkillScope, outcome: &mut Skil
                     continue;
                 }
 
+                if metadata.is_file() && file_name == SKILLS_FILENAME {
+                    match parse_skill_file(&path, scope) {
+                        Ok(skill) => {
+                            outcome.skills.push(skill);
+                        }
+                        Err(err) => {
+                            if scope != SkillScope::System {
+                                outcome.errors.push(SkillError {
+                                    path,
+                                    message: err.to_string(),
+                                });
+                            }
+                        }
+                    }
+                    continue;
+                }
+
                 continue;
             }
 
