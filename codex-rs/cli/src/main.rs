@@ -3003,6 +3003,19 @@ fn merge_interactive_cli_flags(interactive: &mut TuiCli, subcommand_cli: TuiCli)
 fn print_completion(cmd: CompletionCommand) {
     let mut app = MultitoolCli::command();
     let name = "codex";
+    if cmd.shell == Shell::Zsh {
+        // clap_complete places positionals before subcommands in Zsh's _arguments.
+        // The root prompt is an alternative to a subcommand and has no completion
+        // candidates, so omit it from the completion-only command definition.
+        app = clap::Command::new(name)
+            .version(env!("CARGO_PKG_VERSION"))
+            .args(
+                app.get_arguments()
+                    .filter(|arg| arg.get_id() != "prompt")
+                    .cloned(),
+            )
+            .subcommands(app.get_subcommands().cloned());
+    }
     generate(cmd.shell, &mut app, name, &mut std::io::stdout());
 }
 
