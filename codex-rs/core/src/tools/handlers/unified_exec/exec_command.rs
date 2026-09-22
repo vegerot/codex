@@ -33,6 +33,7 @@ use crate::unified_exec::UnifiedExecProcessManager;
 use crate::unified_exec::generate_chunk_id;
 use codex_features::Feature;
 use codex_otel::SessionTelemetry;
+use codex_otel::TOOL_CALL_UNIFIED_EXEC_DURATION_METRIC;
 use codex_otel::TOOL_CALL_UNIFIED_EXEC_METRIC;
 use codex_sandboxing::SandboxManager;
 use codex_sandboxing::SandboxType;
@@ -444,13 +445,25 @@ impl ExecCommandHandler {
             None => manager.exec_command(request, &context).await,
         };
         match result {
-            Ok(response) => Ok(boxed_tool_output(response)),
+            Ok(response) => {
+                step_context.session_telemetry.record_duration(
+                    TOOL_CALL_UNIFIED_EXEC_DURATION_METRIC,
+                    response.wall_time,
+                    &[],
+                );
+                Ok(boxed_tool_output(response))
+            }
             Err(UnifiedExecError::SandboxDenied {
                 output,
                 original_token_count,
                 output_omitted_bytes,
                 ..
             }) => {
+                step_context.session_telemetry.record_duration(
+                    TOOL_CALL_UNIFIED_EXEC_DURATION_METRIC,
+                    output.duration,
+                    &[],
+                );
                 let output_text = output.aggregated_output.text;
                 let original_token_count =
                     original_token_count.unwrap_or_else(|| approx_token_count(&output_text));

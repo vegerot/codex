@@ -663,6 +663,14 @@ fn unified_exec_interaction_cell_retains_detailed_wait() {
 #[test]
 fn final_message_separator_preserves_runtime_metrics_for_short_turns() {
     let summary = RuntimeMetricsSummary {
+        hook_calls: RuntimeMetricTotals {
+            count: 2,
+            duration_ms: 10_000,
+        },
+        local_commands: RuntimeMetricTotals {
+            count: 3,
+            duration_ms: 12_500,
+        },
         tool_calls: RuntimeMetricTotals {
             count: 3,
             duration_ms: 2_450,
@@ -696,7 +704,9 @@ fn final_message_separator_preserves_runtime_metrics_for_short_turns() {
     let rendered = render_lines(&cell.display_lines(/*width*/ 600));
 
     assert_eq!(rendered.len(), 1);
-    assert!(rendered[0].starts_with("  Local tools:"));
+    assert!(rendered[0].starts_with("  Hooks:"));
+    assert!(rendered[0].contains("Hooks: 2 runs (10.0s)"));
+    assert!(rendered[0].contains("Local commands: 3 calls (12.5s)"));
     assert!(rendered[0].contains("Local tools: 3 calls (2.5s)"));
     assert!(rendered[0].contains("Inference: 2 calls (1.2s)"));
     assert!(rendered[0].contains("WebSocket: 1 events send (700ms)"));
@@ -706,6 +716,32 @@ fn final_message_separator_preserves_runtime_metrics_for_short_turns() {
     assert!(rendered[0].contains("Responses API inference: 1.9s"));
     assert!(rendered[0].contains("TTFT: 410ms (iapi) 460ms (service)"));
     assert!(rendered[0].contains("TBT: 1.2s (iapi) 1.2s (service)"));
+}
+
+#[test]
+fn runtime_metrics_label_reports_synchronous_hook_time() {
+    let summary = RuntimeMetricsSummary {
+        hook_calls: RuntimeMetricTotals {
+            count: 2,
+            duration_ms: 10_000,
+        },
+        ..RuntimeMetricsSummary::default()
+    };
+
+    insta::assert_snapshot!(runtime_metrics_label(summary).expect("hook label"), @"Hooks: 2 runs (10.0s)");
+}
+
+#[test]
+fn runtime_metrics_label_reports_local_command_time() {
+    let summary = RuntimeMetricsSummary {
+        local_commands: RuntimeMetricTotals {
+            count: 3,
+            duration_ms: 12_500,
+        },
+        ..RuntimeMetricsSummary::default()
+    };
+
+    insta::assert_snapshot!(runtime_metrics_label(summary).expect("local command label"), @"Local commands: 3 calls (12.5s)");
 }
 
 #[test]

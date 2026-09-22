@@ -11,6 +11,7 @@ use crate::model::ExecutionStatus;
 use crate::model::ExecutionWindow;
 use crate::model::InferenceCall;
 use crate::model::InferenceCallId;
+use crate::model::InferenceTiming;
 use crate::payload::RawPayloadRef;
 use crate::raw_event::RawEventSeq;
 use crate::raw_event::RawTraceEventPayload;
@@ -90,6 +91,10 @@ impl TraceReducer {
                     ended_seq: None,
                     status: ExecutionStatus::Running,
                 },
+                timing: InferenceTiming {
+                    request_started_at_unix_ms: wall_time_unix_ms,
+                    ..InferenceTiming::default()
+                },
                 model: started.model,
                 provider_name: started.provider_name,
                 response_id: None,
@@ -102,6 +107,50 @@ impl TraceReducer {
                 raw_response_payload_id: None,
             },
         );
+        Ok(())
+    }
+
+    pub(super) fn record_inference_response_created(
+        &mut self,
+        seq: RawEventSeq,
+        wall_time_unix_ms: i64,
+        inference_call_id: InferenceCallId,
+        response_id: Option<String>,
+        server_created_at_unix_ms: Option<i64>,
+    ) -> Result<()> {
+        let Some(inference) = self.rollout.inference_calls.get_mut(&inference_call_id) else {
+            bail!("response creation referenced unknown inference call {inference_call_id}");
+        };
+        if inference.timing.response_created_at_unix_ms.is_none() {
+            inference.timing.response_created_at_unix_ms = Some(wall_time_unix_ms);
+            inference.timing.response_created_seq = Some(seq);
+        }
+        if inference
+            .timing
+            .server_response_created_at_unix_ms
+            .is_none()
+        {
+            inference.timing.server_response_created_at_unix_ms = server_created_at_unix_ms;
+        }
+        if inference.response_id.is_none() && response_id.is_some() {
+            inference.response_id = response_id;
+        }
+        Ok(())
+    }
+
+    pub(super) fn record_inference_first_delta(
+        &mut self,
+        seq: RawEventSeq,
+        wall_time_unix_ms: i64,
+        inference_call_id: InferenceCallId,
+    ) -> Result<()> {
+        let Some(inference) = self.rollout.inference_calls.get_mut(&inference_call_id) else {
+            bail!("first delta referenced unknown inference call {inference_call_id}");
+        };
+        if inference.timing.first_delta_at_unix_ms.is_none() {
+            inference.timing.first_delta_at_unix_ms = Some(wall_time_unix_ms);
+            inference.timing.first_delta_seq = Some(seq);
+        }
         Ok(())
     }
 
@@ -141,46 +190,61 @@ impl TraceReducer {
         wall_time_unix_ms: i64,
         payload: RawTraceEventPayload,
     ) -> Result<()> {
-        let (inference_call_id, status, response_id, upstream_request_id, response_payload) =
-            match payload {
-                RawTraceEventPayload::InferenceCompleted {
-                    inference_call_id,
-                    response_id,
-                    upstream_request_id,
-                    response_payload,
-                } => (
-                    inference_call_id,
-                    ExecutionStatus::Completed,
-                    response_id,
-                    upstream_request_id,
-                    Some(response_payload),
-                ),
-                RawTraceEventPayload::InferenceFailed {
-                    inference_call_id,
-                    upstream_request_id,
-                    partial_response_payload,
-                    ..
-                } => (
-                    inference_call_id,
-                    ExecutionStatus::Failed,
-                    None,
-                    upstream_request_id,
-                    partial_response_payload,
-                ),
-                RawTraceEventPayload::InferenceCancelled {
-                    inference_call_id,
-                    upstream_request_id,
-                    partial_response_payload,
-                    ..
-                } => (
-                    inference_call_id,
-                    ExecutionStatus::Cancelled,
-                    None,
-                    upstream_request_id,
-                    partial_response_payload,
-                ),
-                _ => bail!("complete_inference_call received a non-terminal inference event"),
-            };
+        let (
+            inference_call_id,
+            status,
+            response_id,
+            upstream_request_id,
+            server_created_at_unix_ms,
+            server_completed_at_unix_ms,
+            response_payload,
+        ) = match payload {
+            RawTraceEventPayload::InferenceCompleted {
+                inference_call_id,
+                response_id,
+                upstream_request_id,
+                server_created_at_unix_ms,
+                server_completed_at_unix_ms,
+                response_payload,
+            } => (
+                inference_call_id,
+                ExecutionStatus::Completed,
+                response_id,
+                upstream_request_id,
+                server_created_at_unix_ms,
+                server_completed_at_unix_ms,
+                Some(response_payload),
+            ),
+            RawTraceEventPayload::InferenceFailed {
+                inference_call_id,
+                upstream_request_id,
+                partial_response_payload,
+                ..
+            } => (
+                inference_call_id,
+                ExecutionStatus::Failed,
+                None,
+                upstream_request_id,
+                None,
+                None,
+                partial_response_payload,
+            ),
+            RawTraceEventPayload::InferenceCancelled {
+                inference_call_id,
+                upstream_request_id,
+                partial_response_payload,
+                ..
+            } => (
+                inference_call_id,
+                ExecutionStatus::Cancelled,
+                None,
+                upstream_request_id,
+                None,
+                None,
+                partial_response_payload,
+            ),
+            _ => bail!("complete_inference_call received a non-terminal inference event"),
+        };
 
         if !self
             .rollout
@@ -200,7 +264,15 @@ impl TraceReducer {
             let Some(inference) = self.rollout.inference_calls.get_mut(&inference_call_id) else {
                 bail!("inference call {inference_call_id} disappeared during response reduction");
             };
-            inference.response_id = response_id;
+            if response_id.is_some() {
+                inference.response_id = response_id;
+            }
+            if status == ExecutionStatus::Completed {
+                inference.timing.response_completed_at_unix_ms = Some(wall_time_unix_ms);
+                inference.timing.server_response_created_at_unix_ms = server_created_at_unix_ms
+                    .or(inference.timing.server_response_created_at_unix_ms);
+                inference.timing.server_response_completed_at_unix_ms = server_completed_at_unix_ms;
+            }
             // Turn-end cleanup can close a stream before the async mapper observes
             // cancellation. Preserve that terminal status while still retaining any
             // late partial response evidence from the mapper.

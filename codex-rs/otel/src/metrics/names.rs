@@ -4,6 +4,7 @@ pub const TOOL_CALL_UNIFIED_EXEC_METRIC: &str = "codex.tool.unified_exec";
 pub const MULTI_AGENT_SPAWN_FAILURE_METRIC: &str = "codex.multi_agent.spawn.failure";
 pub const MULTI_AGENT_SPAWN_PHASE_DURATION_METRIC: &str =
     "codex.multi_agent.spawn.phase.duration_ms";
+pub const TOOL_CALL_UNIFIED_EXEC_DURATION_METRIC: &str = "codex.tool.unified_exec.duration_ms";
 pub const ARTIFACT_OPERATION_STARTED_METRIC: &str = "codex.artifact.operation.started";
 pub const ARTIFACT_OPERATION_EXPECTED_OUTPUT_COUNT_METRIC: &str =
     "codex.artifact.operation.expected_output_count";

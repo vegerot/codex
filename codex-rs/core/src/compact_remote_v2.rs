@@ -1242,6 +1242,8 @@ mod tests {
             Ok(ResponseEvent::OutputItemDone(compaction.clone())),
             Ok(ResponseEvent::Completed {
                 response_id: "resp-compact".to_string(),
+                server_created_at_unix_seconds: None,
+                server_completed_at_unix_seconds: None,
                 token_usage: Some(TokenUsage {
                     input_tokens: 123_456,
                     cached_input_tokens: 7_890,

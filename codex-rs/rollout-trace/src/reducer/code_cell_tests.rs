@@ -65,6 +65,8 @@ fn code_cell_lifecycle_links_nested_tools_waits_and_outputs() -> anyhow::Result<
         inference_call_id: "inference-1".to_string(),
         response_id: Some("resp-1".to_string()),
         upstream_request_id: None,
+        server_created_at_unix_ms: None,
+        server_completed_at_unix_ms: None,
         response_payload: response,
     })?;
     writer.append_with_context(
@@ -249,6 +251,8 @@ fn fast_code_cell_lifecycle_waits_for_source_item() -> anyhow::Result<()> {
         inference_call_id: "inference-1".to_string(),
         response_id: Some("resp-1".to_string()),
         upstream_request_id: None,
+        server_created_at_unix_ms: None,
+        server_completed_at_unix_ms: None,
         response_payload: response,
     })?;
 
@@ -304,6 +308,8 @@ fn cancelled_turn_terminates_unfinished_code_cell() -> anyhow::Result<()> {
         inference_call_id: "inference-1".to_string(),
         response_id: Some("resp-1".to_string()),
         upstream_request_id: None,
+        server_created_at_unix_ms: None,
+        server_completed_at_unix_ms: None,
         response_payload: response,
     })?;
     writer.append_with_context(
@@ -392,6 +398,8 @@ fn runtime_code_cell_ids_can_repeat_across_threads() -> anyhow::Result<()> {
             inference_call_id: inference_call_id.to_string(),
             response_id: Some(format!("resp-{thread_id}")),
             upstream_request_id: None,
+            server_created_at_unix_ms: None,
+            server_completed_at_unix_ms: None,
             response_payload: response,
         })?;
         writer.append_with_context(

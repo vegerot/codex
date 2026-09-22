@@ -2432,6 +2432,8 @@ where
                 }
                 Ok(ResponseEvent::Completed {
                     response_id,
+                    server_created_at_unix_seconds,
+                    server_completed_at_unix_seconds,
                     token_usage,
                     usage_metadata,
                     end_turn,
@@ -2443,6 +2445,8 @@ where
                     inference_trace_attempt.record_completed(
                         &response_id,
                         upstream_request_id,
+                        unix_seconds_to_millis(server_created_at_unix_seconds),
+                        unix_seconds_to_millis(server_completed_at_unix_seconds),
                         &token_usage,
                         &items_added,
                     );
@@ -2455,6 +2459,8 @@ where
                     if tx_event
                         .send(Ok(ResponseEvent::Completed {
                             response_id,
+                            server_created_at_unix_seconds,
+                            server_completed_at_unix_seconds,
                             token_usage,
                             usage_metadata,
                             end_turn,
@@ -2466,6 +2472,19 @@ where
                     }
                 }
                 Ok(event) => {
+                    match &event {
+                        ResponseEvent::Created {
+                            response_id,
+                            server_created_at_unix_seconds,
+                        } => inference_trace_attempt.record_response_created(
+                            response_id.as_deref(),
+                            unix_seconds_to_millis(*server_created_at_unix_seconds),
+                        ),
+                        event if response_event_is_model_delta(event) => {
+                            inference_trace_attempt.record_first_delta();
+                        }
+                        _ => {}
+                    }
                     if matches!(&event, ResponseEvent::OutputItemAdded(_)) && ttft_ms.is_none() {
                         ttft_ms = Some(
                             i64::try_from(request_start.elapsed().as_millis()).unwrap_or(i64::MAX),
@@ -2517,6 +2536,20 @@ where
             consumer_dropped: consumer_dropped_for_stream,
         },
         rx_last_response,
+    )
+}
+
+fn unix_seconds_to_millis(seconds: Option<i64>) -> Option<i64> {
+    seconds.and_then(|seconds| seconds.checked_mul(1_000))
+}
+
+fn response_event_is_model_delta(event: &ResponseEvent) -> bool {
+    matches!(
+        event,
+        ResponseEvent::OutputTextDelta(_)
+            | ResponseEvent::ToolCallInputDelta { .. }
+            | ResponseEvent::ReasoningSummaryDelta { .. }
+            | ResponseEvent::ReasoningContentDelta { .. }
     )
 }
 

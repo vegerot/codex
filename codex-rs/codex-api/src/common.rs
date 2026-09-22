@@ -81,6 +81,8 @@ pub enum ResponseEvent {
     Created {
         /// Existing server response ID, when supplied by the stream.
         response_id: Option<String>,
+        /// Server-reported creation time from the Responses API object.
+        server_created_at_unix_seconds: Option<i64>,
     },
     SafetyBuffering(SafetyBuffering),
     OutputItemDone(ResponseItem),
@@ -98,6 +100,10 @@ pub enum ResponseEvent {
     ServerReasoningIncluded(bool),
     Completed {
         response_id: String,
+        /// Server-reported creation time from the completed Responses API object.
+        server_created_at_unix_seconds: Option<i64>,
+        /// Server-reported completion time from the completed Responses API object.
+        server_completed_at_unix_seconds: Option<i64>,
         token_usage: Option<TokenUsage>,
         usage_metadata: Option<ResponseUsageMetadata>,
         /// Did the model affirmatively end its turn? Some providers do not set this,

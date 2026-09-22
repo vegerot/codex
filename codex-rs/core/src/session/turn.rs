@@ -2647,7 +2647,7 @@ async fn try_run_sampling_request(
         record_turn_ttft_metric(&turn_context, &event).await;
 
         match event {
-            ResponseEvent::Created { response_id } => {
+            ResponseEvent::Created { response_id, .. } => {
                 if let Some(response_id) = response_id {
                     turn_context
                         .extension_data
@@ -2915,6 +2915,7 @@ async fn try_run_sampling_request(
                 token_usage,
                 usage_metadata,
                 end_turn,
+                ..
             } => {
                 sess.services
                     .analytics_events_client

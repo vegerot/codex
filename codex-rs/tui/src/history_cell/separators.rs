@@ -123,6 +123,22 @@ mod tests;
 
 pub(crate) fn runtime_metrics_label(summary: RuntimeMetricsSummary) -> Option<String> {
     let mut parts = Vec::new();
+    if summary.hook_calls.count > 0 {
+        let duration = format_duration_ms(summary.hook_calls.duration_ms);
+        let runs = pluralize(summary.hook_calls.count, "run", "runs");
+        parts.push(format!(
+            "Hooks: {} {runs} ({duration})",
+            summary.hook_calls.count
+        ));
+    }
+    if summary.local_commands.count > 0 {
+        let duration = format_duration_ms(summary.local_commands.duration_ms);
+        let calls = pluralize(summary.local_commands.count, "call", "calls");
+        parts.push(format!(
+            "Local commands: {} {calls} ({duration})",
+            summary.local_commands.count
+        ));
+    }
     if summary.tool_calls.count > 0 {
         let duration = format_duration_ms(summary.tool_calls.duration_ms);
         let calls = pluralize(summary.tool_calls.count, "call", "calls");

@@ -74,6 +74,8 @@ enum InferenceTraceAttemptState {
 struct EnabledInferenceTraceAttempt {
     context: EnabledInferenceTraceContext,
     inference_call_id: InferenceCallId,
+    response_created_recorded: AtomicBool,
+    first_delta_recorded: AtomicBool,
     terminal_recorded: AtomicBool,
 }
 
@@ -128,6 +130,8 @@ impl InferenceTraceContext {
             state: InferenceTraceAttemptState::Enabled(EnabledInferenceTraceAttempt {
                 context: context.clone(),
                 inference_call_id: next_inference_call_id(),
+                response_created_recorded: AtomicBool::new(false),
+                first_delta_recorded: AtomicBool::new(false),
                 terminal_recorded: AtomicBool::new(false),
             }),
         }
@@ -196,6 +200,47 @@ impl InferenceTraceAttempt {
         );
     }
 
+    /// Records when the provider acknowledges creation of the response.
+    pub fn record_response_created(
+        &self,
+        response_id: Option<&str>,
+        server_created_at_unix_ms: Option<i64>,
+    ) {
+        let InferenceTraceAttemptState::Enabled(attempt) = &self.state else {
+            return;
+        };
+        if attempt
+            .response_created_recorded
+            .swap(true, Ordering::AcqRel)
+        {
+            return;
+        }
+        append_with_context_best_effort(
+            &attempt.context,
+            RawTraceEventPayload::InferenceResponseCreated {
+                inference_call_id: attempt.inference_call_id.clone(),
+                response_id: response_id.map(str::to_string),
+                server_created_at_unix_ms,
+            },
+        );
+    }
+
+    /// Records the first streamed model delta for this response.
+    pub fn record_first_delta(&self) {
+        let InferenceTraceAttemptState::Enabled(attempt) = &self.state else {
+            return;
+        };
+        if attempt.first_delta_recorded.swap(true, Ordering::AcqRel) {
+            return;
+        }
+        append_with_context_best_effort(
+            &attempt.context,
+            RawTraceEventPayload::InferenceFirstDelta {
+                inference_call_id: attempt.inference_call_id.clone(),
+            },
+        );
+    }
+
     /// Records successful provider completion and serializes the observed output items.
     ///
     /// Callers pass protocol-native response items so this crate owns the
@@ -206,6 +251,8 @@ impl InferenceTraceAttempt {
         &self,
         response_id: &str,
         upstream_request_id: Option<&str>,
+        server_created_at_unix_ms: Option<i64>,
+        server_completed_at_unix_ms: Option<i64>,
         token_usage: &Option<TokenUsage>,
         output_items: &[ResponseItem],
     ) {
@@ -228,6 +275,8 @@ impl InferenceTraceAttempt {
                 inference_call_id: attempt.inference_call_id.clone(),
                 response_id: Some(response_id.to_string()),
                 upstream_request_id: upstream_request_id.map(str::to_string),
+                server_created_at_unix_ms,
+                server_completed_at_unix_ms,
                 response_payload,
             },
         );
@@ -475,7 +524,19 @@ mod tests {
                 "content": [{"type": "input_text", "text": "hello"}]
             }],
         }));
-        attempt.record_completed("resp-1", Some("req-1"), &None, &[]);
+        attempt.record_response_created(
+            Some("resp-1"),
+            /*server_created_at_unix_ms*/ Some(1_700_000_000_000),
+        );
+        attempt.record_first_delta();
+        attempt.record_completed(
+            "resp-1",
+            Some("req-1"),
+            /*server_created_at_unix_ms*/ Some(1_700_000_000_000),
+            /*server_completed_at_unix_ms*/ Some(1_700_000_002_000),
+            &None,
+            &[],
+        );
 
         let rollout = replay_bundle(temp.path())?;
         let inference = rollout
@@ -488,7 +549,18 @@ mod tests {
         assert_eq!(inference.thread_id, "thread-root");
         assert_eq!(inference.codex_turn_id, "turn-1");
         assert_eq!(inference.execution.status, ExecutionStatus::Completed);
+        assert!(inference.timing.response_created_at_unix_ms.is_some());
+        assert!(inference.timing.first_delta_at_unix_ms.is_some());
+        assert!(inference.timing.response_completed_at_unix_ms.is_some());
         assert_eq!(inference.upstream_request_id, Some("req-1".to_string()));
+        assert_eq!(
+            inference.timing.server_response_created_at_unix_ms,
+            Some(1_700_000_000_000),
+        );
+        assert_eq!(
+            inference.timing.server_response_completed_at_unix_ms,
+            Some(1_700_000_002_000),
+        );
         assert_eq!(rollout.raw_payloads.len(), 2);
 
         Ok(())
