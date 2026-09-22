@@ -226,6 +226,26 @@ impl TraceReducer {
                     },
                 )?;
             }
+            RawTraceEventPayload::InferenceResponseCreated {
+                inference_call_id,
+                response_id,
+                server_created_at_unix_ms,
+            } => {
+                self.record_inference_response_created(
+                    event.seq,
+                    event.wall_time_unix_ms,
+                    inference_call_id,
+                    response_id,
+                    server_created_at_unix_ms,
+                )?;
+            }
+            RawTraceEventPayload::InferenceFirstDelta { inference_call_id } => {
+                self.record_inference_first_delta(
+                    event.seq,
+                    event.wall_time_unix_ms,
+                    inference_call_id,
+                )?;
+            }
             payload @ (RawTraceEventPayload::InferenceCompleted { .. }
             | RawTraceEventPayload::InferenceFailed { .. }
             | RawTraceEventPayload::InferenceCancelled { .. }) => {
