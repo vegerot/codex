@@ -1,5 +1,17 @@
 #!/usr/bin/env python3
 
+# Personal Apple Silicon Mac setup: the terminal and installed ChatGPT.app use
+# ~/.local/bin/codex -> codex-rs/target/codex-package-release/bin/codex.
+# CODEX_CLI_PATH names that executable for Computer Use too. This script resolves V8 build inputs
+# and builds matching release codex and codex-code-mode-host binaries. It then
+# validates the existing package and atomically replaces each binary, preserving
+# the rg/zsh resource symlinks; it does not create a package from scratch.
+# Link-time optimization is off and codegen uses 8 units to favor build speed
+# over maximum optimization. Incremental compilation is off to save disk space
+# for daily unattended builds, accepting slower rebuilds. Reusing installed
+# resources avoids duplication but lets their versions change with updates.
+# Restart ChatGPT to load rebuilt binaries. More: ~/ai-conversations/codex/README.md
+
 import os
 import shutil
 import subprocess
@@ -62,8 +74,6 @@ def main() -> None:
 
     subprocess.run(
         [
-            "/usr/bin/caffeinate",
-            "-i",
             "cargo",
             "build",
             "--locked",
