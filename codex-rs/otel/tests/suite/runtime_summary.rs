@@ -1,9 +1,13 @@
+use codex_otel::HOOK_RUN_DURATION_METRIC;
+use codex_otel::HOOK_RUN_METRIC;
 use codex_otel::MetricsClient;
 use codex_otel::MetricsConfig;
 use codex_otel::Result;
 use codex_otel::RuntimeMetricTotals;
 use codex_otel::RuntimeMetricsSummary;
 use codex_otel::SessionTelemetry;
+use codex_otel::TOOL_CALL_UNIFIED_EXEC_DURATION_METRIC;
+use codex_otel::TOOL_CALL_UNIFIED_EXEC_METRIC;
 use codex_otel::TelemetryAuthMode;
 use codex_protocol::ThreadId;
 use codex_protocol::ToolName;
@@ -36,6 +40,37 @@ fn runtime_metrics_summary_collects_tool_api_and_streaming_metrics() -> Result<(
     .with_metrics(metrics);
 
     manager.reset_runtime_metrics();
+
+    manager.counter(
+        HOOK_RUN_METRIC,
+        /*inc*/ 2,
+        &[("execution_mode", "sync")],
+    );
+    manager.record_duration(
+        HOOK_RUN_DURATION_METRIC,
+        Duration::from_millis(10_000),
+        &[("execution_mode", "sync")],
+    );
+    manager.counter(
+        HOOK_RUN_METRIC,
+        /*inc*/ 1,
+        &[("execution_mode", "async")],
+    );
+    manager.record_duration(
+        HOOK_RUN_DURATION_METRIC,
+        Duration::from_millis(30_000),
+        &[("execution_mode", "async")],
+    );
+    manager.counter(
+        TOOL_CALL_UNIFIED_EXEC_METRIC,
+        /*inc*/ 3,
+        &[("tty", "false")],
+    );
+    manager.record_duration(
+        TOOL_CALL_UNIFIED_EXEC_DURATION_METRIC,
+        Duration::from_millis(12_500),
+        &[],
+    );
 
     manager.tool_result_with_tags(
         &ToolName::plain("shell"),
@@ -110,6 +145,14 @@ fn runtime_metrics_summary_collects_tool_api_and_streaming_metrics() -> Result<(
         .runtime_metrics_summary()
         .expect("runtime metrics summary should be available");
     let expected = RuntimeMetricsSummary {
+        hook_calls: RuntimeMetricTotals {
+            count: 2,
+            duration_ms: 10_000,
+        },
+        local_commands: RuntimeMetricTotals {
+            count: 3,
+            duration_ms: 12_500,
+        },
         tool_calls: RuntimeMetricTotals {
             count: 1,
             duration_ms: 250,

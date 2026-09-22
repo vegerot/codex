@@ -108,6 +108,10 @@ pub fn spawn_response_stream(
 struct ResponseCompleted {
     id: String,
     #[serde(default)]
+    created_at: Option<i64>,
+    #[serde(default)]
+    completed_at: Option<i64>,
+    #[serde(default)]
     usage: Option<ResponseCompletedUsage>,
     usage_metadata: Option<ResponseUsageMetadata>,
     #[serde(default)]
@@ -407,7 +411,12 @@ pub fn process_responses_event(
                     .get("id")
                     .and_then(Value::as_str)
                     .map(str::to_owned);
-                return Ok(Some(ResponseEvent::Created { response_id }));
+                let server_created_at_unix_seconds =
+                    response.get("created_at").and_then(Value::as_i64);
+                return Ok(Some(ResponseEvent::Created {
+                    response_id,
+                    server_created_at_unix_seconds,
+                }));
             }
         }
         "response.failed" => {
@@ -445,6 +454,8 @@ pub fn process_responses_event(
                         }
                         return Ok(Some(ResponseEvent::Completed {
                             response_id: resp.id,
+                            server_created_at_unix_seconds: resp.created_at,
+                            server_completed_at_unix_seconds: resp.completed_at,
                             token_usage: resp.usage.map(Into::into),
                             usage_metadata: resp.usage_metadata,
                             end_turn: if interrupted {
@@ -755,7 +766,11 @@ mod tests {
 
         let completed = json!({
             "type": "response.completed",
-            "response": { "id": "resp1" }
+            "response": {
+                "id": "resp1",
+                "created_at": 1_700_000_000,
+                "completed_at": 1_700_000_002
+            }
         })
         .to_string();
 
@@ -785,11 +800,15 @@ mod tests {
         match &events[2] {
             Ok(ResponseEvent::Completed {
                 response_id,
+                server_created_at_unix_seconds,
+                server_completed_at_unix_seconds,
                 token_usage,
                 usage_metadata,
                 end_turn,
             }) => {
                 assert_eq!(response_id, "resp1");
+                assert_eq!(*server_created_at_unix_seconds, Some(1_700_000_000));
+                assert_eq!(*server_completed_at_unix_seconds, Some(1_700_000_002));
                 assert!(token_usage.is_none());
                 assert!(usage_metadata.is_none());
                 assert!(end_turn.is_none());
@@ -986,6 +1005,7 @@ mod tests {
                 token_usage,
                 usage_metadata,
                 end_turn,
+                ..
             }) => {
                 assert_eq!(response_id, "resp1");
                 assert!(token_usage.is_none());
@@ -1540,6 +1560,7 @@ mod tests {
                 "type": "response.created",
                 "response": {
                     "id": "resp-1",
+                    "created_at": 1_700_000_000,
                     "model": CYBER_RESTRICTED_MODEL_FOR_TESTS
                 }
             }),
@@ -1554,7 +1575,13 @@ mod tests {
         .await;
 
         assert_eq!(events.len(), 2);
-        assert_matches!(&events[0], ResponseEvent::Created { .. });
+        assert_matches!(
+            &events[0],
+            ResponseEvent::Created {
+                response_id: Some(response_id),
+                server_created_at_unix_seconds: Some(1_700_000_000),
+            } if response_id == "resp-1"
+        );
         assert_matches!(
             &events[1],
             ResponseEvent::Completed {
@@ -1562,6 +1589,7 @@ mod tests {
                 token_usage: None,
                 usage_metadata: None,
                 end_turn: None,
+                ..
             } if response_id == "resp-1"
         );
     }
@@ -1594,7 +1622,10 @@ mod tests {
         );
         assert_matches!(
             &events[1],
-            ResponseEvent::Created { response_id: Some(id) } if id == "resp-1"
+            ResponseEvent::Created {
+                response_id: Some(id),
+                ..
+            } if id == "resp-1"
         );
         assert_matches!(
             &events[2],
@@ -1603,6 +1634,7 @@ mod tests {
                 token_usage: None,
                 usage_metadata: None,
                 end_turn: None,
+                ..
             } if response_id == "resp-1"
         );
     }
@@ -1639,6 +1671,7 @@ mod tests {
                 token_usage: None,
                 usage_metadata: None,
                 end_turn: None,
+                ..
             } if response_id == "resp-1"
         );
     }
@@ -1675,6 +1708,7 @@ mod tests {
                 token_usage: None,
                 usage_metadata: None,
                 end_turn: None,
+                ..
             } if response_id == "resp-1"
         );
     }

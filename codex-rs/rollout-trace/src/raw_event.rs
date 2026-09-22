@@ -100,12 +100,28 @@ pub enum RawTraceEventPayload {
         provider_name: String,
         request_payload: RawPayloadRef,
     },
+    InferenceResponseCreated {
+        inference_call_id: InferenceCallId,
+        /// Responses API `response.id`, when supplied by the created event.
+        response_id: Option<String>,
+        /// Server-reported Responses API creation time converted to Unix milliseconds.
+        server_created_at_unix_ms: Option<i64>,
+    },
+    InferenceFirstDelta {
+        inference_call_id: InferenceCallId,
+    },
     InferenceCompleted {
         inference_call_id: InferenceCallId,
         /// Responses API `response.id`; used by `previous_response_id`.
         response_id: Option<String>,
         /// Provider transport request id, such as `x-request-id`.
         upstream_request_id: Option<String>,
+        /// Server-reported Responses API creation time converted to Unix milliseconds.
+        #[serde(default)]
+        server_created_at_unix_ms: Option<i64>,
+        /// Server-reported Responses API completion time converted to Unix milliseconds.
+        #[serde(default)]
+        server_completed_at_unix_ms: Option<i64>,
         response_payload: RawPayloadRef,
     },
     InferenceFailed {
@@ -240,6 +256,8 @@ impl RawTraceEventPayload {
             | RawTraceEventPayload::ThreadEnded { .. }
             | RawTraceEventPayload::CodexTurnStarted { .. }
             | RawTraceEventPayload::CodexTurnEnded { .. }
+            | RawTraceEventPayload::InferenceResponseCreated { .. }
+            | RawTraceEventPayload::InferenceFirstDelta { .. }
             | RawTraceEventPayload::CompactionRequestFailed { .. }
             | RawTraceEventPayload::CodeCellStarted { .. }
             | RawTraceEventPayload::McpToolCallCorrelationAssigned { .. }

@@ -552,6 +552,8 @@ fn append_inference_with_tool_call(writer: &TraceWriter) -> anyhow::Result<()> {
         inference_call_id: "inference-1".to_string(),
         response_id: Some("resp-1".to_string()),
         upstream_request_id: None,
+        server_created_at_unix_ms: None,
+        server_completed_at_unix_ms: None,
         response_payload: response,
     })?;
     Ok(())

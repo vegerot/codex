@@ -1562,6 +1562,69 @@ async fn dropped_response_stream_traces_cancelled_partial_output() -> anyhow::Re
 }
 
 #[tokio::test]
+async fn completed_response_stream_traces_timing_milestones() -> anyhow::Result<()> {
+    let temp = TempDir::new()?;
+    let attempt = started_inference_attempt(&temp)?;
+    let api_stream = futures::stream::iter([
+        Ok(ResponseEvent::Created {
+            response_id: Some("resp-1".to_string()),
+            server_created_at_unix_seconds: Some(1_700_000_000),
+        }),
+        Ok(ResponseEvent::OutputTextDelta("hello".to_string())),
+        Ok(ResponseEvent::Completed {
+            response_id: "resp-1".to_string(),
+            server_created_at_unix_seconds: Some(1_700_000_000),
+            server_completed_at_unix_seconds: Some(1_700_000_002),
+            token_usage: None,
+            usage_metadata: None,
+            end_turn: Some(true),
+        }),
+    ]);
+    let (mut stream, _) = super::map_response_events(
+        Some("req-1".to_string()),
+        api_stream,
+        test_session_telemetry(),
+        attempt,
+        test_model_provider(),
+    );
+
+    while stream.next().await.is_some() {}
+
+    let rollout = replay_bundle(temp.path())?;
+    let inference = rollout
+        .inference_calls
+        .values()
+        .next()
+        .expect("inference should be reduced");
+    let response_created_at = inference
+        .timing
+        .response_created_at_unix_ms
+        .expect("response creation should be recorded");
+    let first_delta_at = inference
+        .timing
+        .first_delta_at_unix_ms
+        .expect("first delta should be recorded");
+    let response_completed_at = inference
+        .timing
+        .response_completed_at_unix_ms
+        .expect("response completion should be recorded");
+
+    assert!(inference.timing.request_started_at_unix_ms <= response_created_at);
+    assert!(response_created_at <= first_delta_at);
+    assert!(first_delta_at <= response_completed_at);
+    assert_eq!(
+        inference.timing.server_response_created_at_unix_ms,
+        Some(1_700_000_000_000),
+    );
+    assert_eq!(
+        inference.timing.server_response_completed_at_unix_ms,
+        Some(1_700_000_002_000),
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
 async fn response_stream_records_last_model_feedback_ids() {
     let tags = Arc::new(Mutex::new(BTreeMap::new()));
     let _guard = tracing_subscriber::registry()
@@ -1569,9 +1632,14 @@ async fn response_stream_records_last_model_feedback_ids() {
         .set_default();
 
     let api_stream = futures::stream::iter([
-        Ok(ResponseEvent::Created { response_id: None }),
+        Ok(ResponseEvent::Created {
+            response_id: None,
+            server_created_at_unix_seconds: None,
+        }),
         Ok(ResponseEvent::Completed {
             response_id: "resp-123".to_string(),
+            server_created_at_unix_seconds: None,
+            server_completed_at_unix_seconds: None,
             token_usage: None,
             usage_metadata: None,
             end_turn: Some(true),
@@ -1787,7 +1855,10 @@ async fn dropped_backpressured_response_stream_traces_cancelled_partial_output()
     let backpressured_item_yielded = Arc::new(Notify::new());
     let mut events = VecDeque::new();
     for _ in 0..super::RESPONSE_STREAM_CHANNEL_CAPACITY {
-        events.push_back(ResponseEvent::Created { response_id: None });
+        events.push_back(ResponseEvent::Created {
+            response_id: None,
+            server_created_at_unix_seconds: None,
+        });
     }
     events.push_back(ResponseEvent::OutputItemDone(output_message(
         "1",
