@@ -1,5 +1,7 @@
 use crate::metrics::names::API_CALL_COUNT_METRIC;
 use crate::metrics::names::API_CALL_DURATION_METRIC;
+use crate::metrics::names::HOOK_RUN_DURATION_METRIC;
+use crate::metrics::names::HOOK_RUN_METRIC;
 use crate::metrics::names::RESPONSES_API_ENGINE_IAPI_TBT_DURATION_METRIC;
 use crate::metrics::names::RESPONSES_API_ENGINE_IAPI_TTFT_DURATION_METRIC;
 use crate::metrics::names::RESPONSES_API_ENGINE_SERVICE_TBT_DURATION_METRIC;
@@ -10,6 +12,8 @@ use crate::metrics::names::SSE_EVENT_COUNT_METRIC;
 use crate::metrics::names::SSE_EVENT_DURATION_METRIC;
 use crate::metrics::names::TOOL_CALL_COUNT_METRIC;
 use crate::metrics::names::TOOL_CALL_DURATION_METRIC;
+use crate::metrics::names::TOOL_CALL_UNIFIED_EXEC_DURATION_METRIC;
+use crate::metrics::names::TOOL_CALL_UNIFIED_EXEC_METRIC;
 use crate::metrics::names::TURN_TTFM_DURATION_METRIC;
 use crate::metrics::names::TURN_TTFT_DURATION_METRIC;
 use crate::metrics::names::WEBSOCKET_EVENT_COUNT_METRIC;
@@ -40,6 +44,8 @@ impl RuntimeMetricTotals {
 
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct RuntimeMetricsSummary {
+    pub hook_calls: RuntimeMetricTotals,
+    pub local_commands: RuntimeMetricTotals,
     pub tool_calls: RuntimeMetricTotals,
     pub api_calls: RuntimeMetricTotals,
     pub streaming_events: RuntimeMetricTotals,
@@ -57,7 +63,9 @@ pub struct RuntimeMetricsSummary {
 
 impl RuntimeMetricsSummary {
     pub fn is_empty(self) -> bool {
-        self.tool_calls.is_empty()
+        self.hook_calls.is_empty()
+            && self.local_commands.is_empty()
+            && self.tool_calls.is_empty()
             && self.api_calls.is_empty()
             && self.streaming_events.is_empty()
             && self.websocket_calls.is_empty()
@@ -73,6 +81,8 @@ impl RuntimeMetricsSummary {
     }
 
     pub fn merge(&mut self, other: Self) {
+        self.hook_calls.merge(other.hook_calls);
+        self.local_commands.merge(other.local_commands);
         self.tool_calls.merge(other.tool_calls);
         self.api_calls.merge(other.api_calls);
         self.streaming_events.merge(other.streaming_events);
@@ -117,6 +127,19 @@ impl RuntimeMetricsSummary {
     }
 
     pub(crate) fn from_snapshot(snapshot: &ResourceMetrics) -> Self {
+        let hook_calls = RuntimeMetricTotals {
+            count: sum_counter_with_attribute(snapshot, HOOK_RUN_METRIC, "execution_mode", "sync"),
+            duration_ms: sum_histogram_ms_with_attribute(
+                snapshot,
+                HOOK_RUN_DURATION_METRIC,
+                "execution_mode",
+                "sync",
+            ),
+        };
+        let local_commands = RuntimeMetricTotals {
+            count: sum_counter(snapshot, TOOL_CALL_UNIFIED_EXEC_METRIC),
+            duration_ms: sum_histogram_ms(snapshot, TOOL_CALL_UNIFIED_EXEC_DURATION_METRIC),
+        };
         let tool_calls = RuntimeMetricTotals {
             count: sum_counter(snapshot, TOOL_CALL_COUNT_METRIC),
             duration_ms: sum_histogram_ms(snapshot, TOOL_CALL_DURATION_METRIC),
@@ -152,6 +175,8 @@ impl RuntimeMetricsSummary {
         let turn_ttft_ms = sum_histogram_ms(snapshot, TURN_TTFT_DURATION_METRIC);
         let turn_ttfm_ms = sum_histogram_ms(snapshot, TURN_TTFM_DURATION_METRIC);
         Self {
+            hook_calls,
+            local_commands,
             tool_calls,
             api_calls,
             streaming_events,
@@ -188,8 +213,62 @@ fn sum_counter_metric(metric: &Metric) -> u64 {
     }
 }
 
+fn sum_counter_with_attribute(
+    snapshot: &ResourceMetrics,
+    name: &str,
+    attribute_key: &str,
+    attribute_value: &str,
+) -> u64 {
+    snapshot
+        .scope_metrics()
+        .flat_map(opentelemetry_sdk::metrics::data::ScopeMetrics::metrics)
+        .filter(|metric| metric.name() == name)
+        .map(|metric| match metric.data() {
+            AggregatedMetrics::U64(MetricData::Sum(sum)) => sum
+                .data_points()
+                .filter(|point| {
+                    point.attributes().any(|attribute| {
+                        attribute.key.as_str() == attribute_key
+                            && attribute.value.as_str().as_ref() == attribute_value
+                    })
+                })
+                .map(opentelemetry_sdk::metrics::data::SumDataPoint::value)
+                .sum(),
+            _ => 0,
+        })
+        .sum()
+}
+
 fn sum_histogram_ms(snapshot: &ResourceMetrics, name: &str) -> u64 {
     f64_to_u64(sum_histogram_f64(snapshot, name))
+}
+
+fn sum_histogram_ms_with_attribute(
+    snapshot: &ResourceMetrics,
+    name: &str,
+    attribute_key: &str,
+    attribute_value: &str,
+) -> u64 {
+    f64_to_u64(
+        snapshot
+            .scope_metrics()
+            .flat_map(opentelemetry_sdk::metrics::data::ScopeMetrics::metrics)
+            .filter(|metric| metric.name() == name)
+            .map(|metric| match metric.data() {
+                AggregatedMetrics::F64(MetricData::Histogram(histogram)) => histogram
+                    .data_points()
+                    .filter(|point| {
+                        point.attributes().any(|attribute| {
+                            attribute.key.as_str() == attribute_key
+                                && attribute.value.as_str().as_ref() == attribute_value
+                        })
+                    })
+                    .map(opentelemetry_sdk::metrics::data::HistogramDataPoint::sum)
+                    .sum(),
+                _ => 0.0,
+            })
+            .sum(),
+    )
 }
 
 fn sum_histogram_f64(snapshot: &ResourceMetrics, name: &str) -> f64 {

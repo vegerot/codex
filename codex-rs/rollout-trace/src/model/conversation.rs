@@ -2,6 +2,7 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use crate::payload::RawPayloadId;
+use crate::raw_event::RawEventSeq;
 
 use super::AgentPath;
 use super::AgentThreadId;
@@ -163,6 +164,9 @@ pub struct InferenceCall {
     pub thread_id: AgentThreadId,
     pub codex_turn_id: CodexTurnId,
     pub execution: ExecutionWindow,
+    /// Client- and server-observed response milestones for latency analysis.
+    #[serde(default)]
+    pub timing: InferenceTiming,
     pub model: String,
     pub provider_name: String,
     /// Responses API response id, used by follow-up `previous_response_id` requests.
@@ -179,6 +183,23 @@ pub struct InferenceCall {
     pub raw_request_payload_id: RawPayloadId,
     /// Full upstream response payload. `None` while running or after pre-stream failures.
     pub raw_response_payload_id: Option<RawPayloadId>,
+}
+
+/// Milestones for one upstream inference request.
+///
+/// Client timestamps use the rollout trace writer's wall clock. Server timestamps come from the
+/// Responses API object and retain the API's second-level precision after conversion to
+/// milliseconds.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct InferenceTiming {
+    pub request_started_at_unix_ms: i64,
+    pub response_created_at_unix_ms: Option<i64>,
+    pub response_created_seq: Option<RawEventSeq>,
+    pub first_delta_at_unix_ms: Option<i64>,
+    pub first_delta_seq: Option<RawEventSeq>,
+    pub response_completed_at_unix_ms: Option<i64>,
+    pub server_response_created_at_unix_ms: Option<i64>,
+    pub server_response_completed_at_unix_ms: Option<i64>,
 }
 
 /// Token usage summary for one inference call.
