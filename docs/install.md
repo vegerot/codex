@@ -31,11 +31,12 @@ cargo install --locked dotslash
 # Install nextest for the `just test` helper.
 cargo install --locked cargo-nextest
 
-# Build Codex.
-cargo build
+# Build the CLI package. This fetches the matching Codex-built V8 artifacts;
+# a plain `cargo build` may fail when the pinned upstream V8 archive is unavailable.
+just assemble-codex-package --package-dir target/codex-package
 
 # Launch the TUI with a sample prompt.
-cargo run --bin codex -- "explain this codebase to me"
+./target/codex-package/bin/codex "explain this codebase to me"
 
 # After making changes, use the root justfile helpers (they default to codex-rs):
 just fmt
