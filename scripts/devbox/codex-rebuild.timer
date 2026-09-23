@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily Codex source build at 9 AM Pacific
+
+[Timer]
+OnCalendar=*-*-* 09:00:00 America/Los_Angeles
+AccuracySec=1min
+Persistent=true
+Unit=codex-rebuild.service
+
+[Install]
+WantedBy=timers.target
