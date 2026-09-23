@@ -14,6 +14,7 @@ ROOT = Path(__file__).resolve().parent
 os.environ["CODEX_REPO_ROOT"] = str(ROOT)
 
 from scripts.codex_package.layout import build_package_dir
+from scripts.codex_package.nightly_version import stamp_nightly_version
 from scripts.codex_package.ripgrep import resolve_rg_bin
 from scripts.codex_package.targets import PACKAGE_VARIANTS, TARGET_SPECS, PackageInputs
 from scripts.codex_package.v8 import resolve_codex_v8_cargo_env
@@ -85,7 +86,7 @@ def main():
     cpus = len(os.sched_getaffinity(0))
     jobs = int(
         os.environ.get(
-            "CUSTOM_CODEX_BUILD_JOBS", min(cpus, max(1, int(total / GIB - 4) // 3), 16)
+            "CUSTOM_CODEX_BUILD_JOBS", min(cpus, max(1, int(total / GIB - 4) // 2), 32)
         )
     )
     print(
@@ -110,11 +111,13 @@ def main():
     commit = subprocess.check_output(
         ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True
     ).strip()
+    version_info = stamp_nightly_version(ROOT, commit)
     rustc = subprocess.check_output(
         ["rustc", f"+{toolchain}", "--version"], text=True
     ).strip()
     metadata = {
         "commit": commit,
+        **version_info,
         "target": spec.target,
         "rustc": rustc,
         "jobs": jobs,
@@ -196,7 +199,11 @@ def main():
     )
     for name in ("LICENSE", "NOTICE"):
         (output / name).write_bytes((ROOT / name).read_bytes())
-    subprocess.run([str(output / "bin/codex"), "--version"], check=True)
+    cli_version = subprocess.check_output(
+        [str(output / "bin/codex"), "--version"], text=True
+    ).strip()
+    assert cli_version == f"codex-cli {version_info['version']}", cli_version
+    print(cli_version, flush=True)
     subprocess.run([str(output / "bin/codex-code-mode-host"), "--help"], check=True)
     metadata["total_seconds"] = round(time.monotonic() - started, 2)
     (output / "build-info.json").write_text(json.dumps(metadata, indent=2) + "\n")
