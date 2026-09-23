@@ -143,6 +143,8 @@ def main():
         "codex",
         "--bin",
         "codex-code-mode-host",
+        "--bin",
+        "bwrap",
         "--timings",
     ]
     compile_started = time.monotonic()
@@ -192,7 +194,7 @@ def main():
             code_mode_host_bin=binaries / "codex-code-mode-host",
             rg_bin=resolve_rg_bin(spec, None),
             zsh_bin=None,
-            bwrap_bin=None,
+            bwrap_bin=binaries / "bwrap",
             codex_command_runner_bin=None,
             codex_windows_sandbox_setup_bin=None,
         ),
@@ -208,7 +210,7 @@ def main():
     metadata["total_seconds"] = round(time.monotonic() - started, 2)
     (output / "build-info.json").write_text(json.dumps(metadata, indent=2) + "\n")
     sums = []
-    for relative in ("bin/codex", "bin/codex-code-mode-host", "codex-path/rg"):
+    for relative in ("bin/codex", "bin/codex-code-mode-host", "codex-path/rg", "codex-resources/bwrap"):
         with (output / relative).open("rb") as source:
             digest = hashlib.file_digest(source, "sha256").hexdigest()
         sums.append(f"{digest}  {relative}\n")
