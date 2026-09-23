@@ -331,7 +331,6 @@ impl ChatWidget {
                     self.add_error_message(PARENT_OWNED_INPUT_MESSAGE.to_string());
                     return;
                 }
-                self.clear_token_usage();
                 if !self.bottom_pane.is_task_running() {
                     self.bottom_pane.set_task_running(/*running*/ true);
                 }
