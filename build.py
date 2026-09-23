@@ -10,7 +10,7 @@
 # over maximum optimization. Incremental compilation is off to save disk space
 # for daily unattended builds, accepting slower rebuilds. Reusing installed
 # resources avoids duplication but lets their versions change with updates.
-# Linux builds use 6 jobs. These full-access packages do not need a separate sandbox executable.
+# Linux builds use 6 jobs and include bwrap for daemon package validation.
 # Restart the app/server to load rebuilt binaries. More: ~/ai-conversations/codex/README.md
 
 import json
@@ -59,8 +59,8 @@ def validate_existing_package(spec: TargetSpec) -> None:
         )
         return
 
-    # The canonical Linux validator requires bwrap. Our full-access package
-    # deliberately omits it, and does not require the optional patched zsh.
+    # Validate the existing skeleton before installing newly built resources.
+    # The complete Linux package is validated after bwrap is installed.
     metadata = json.loads((PACKAGE_DIR / "codex-package.json").read_text())
     expected = {
         "layoutVersion": 1,
@@ -154,7 +154,11 @@ def install_release_binaries(spec: TargetSpec) -> None:
         package_bin_dir / f"codex-code-mode-host{spec.exe_suffix}",
     )
 
-    validate_existing_package(spec)
+    if spec.is_linux:
+        atomic_copy(output_dir / "bwrap", PACKAGE_DIR / "codex-resources" / "bwrap")
+        validate_package_dir(PACKAGE_DIR, variant, spec, include_zsh=False)
+    else:
+        validate_existing_package(spec)
     print(f"Updated Codex package binaries at {PACKAGE_DIR}")
 
 
@@ -184,6 +188,7 @@ def main() -> None:
         "--timings",
     ]
     if spec.is_linux:
+        command.extend(["--bin", "bwrap"])
         build_linux(command, env)
     else:
         subprocess.run(command, cwd=REPO_ROOT / "codex-rs", env=env, check=True)
