@@ -74,3 +74,9 @@ already-running task.
 
 Operational code lives here. Historical measurements and phone diagnostics
 remain in the `~/ai-conversations` repository under `codex/source-builds/`.
+
+Routine build, dependency, packaging, and orchestration bugs are repaired
+automatically with evidence and validation. A scoped source repair gets a new
+frozen SCM attempt; uncertain submissions are reconciled before resubmission.
+Finisher errors request repair and an idle retry while retaining failure records.
+Successful work is not repeated, and active-task protection remains mandatory.
