@@ -556,6 +556,7 @@ pub(crate) struct ChatWidget {
     pub(crate) windows_sandbox_elevated_setup_complete: bool,
     token_info: Option<TokenUsageInfo>,
     token_usage_pending: bool,
+    deferred_compaction_token_info: Option<TokenUsageInfo>,
     // Status and polling use account usage reads; response streams may identify meters differently.
     rate_limit_snapshots_by_limit_id: BTreeMap<String, RateLimitSnapshotDisplay>,
     refreshing_status_outputs: Vec<(u64, StatusHistoryHandle)>,
@@ -1102,7 +1103,13 @@ impl ChatWidget {
 
     pub(crate) fn set_token_info(&mut self, info: Option<TokenUsageInfo>) {
         match info {
-            Some(info) => self.apply_token_info(info),
+            Some(info) => {
+                if self.status_state.compaction.is_some() {
+                    self.deferred_compaction_token_info = Some(info);
+                } else {
+                    self.apply_token_info(info);
+                }
+            }
             None => {
                 self.token_usage_pending = true;
                 self.bottom_pane
@@ -2017,10 +2024,6 @@ impl ChatWidget {
     #[cfg(test)]
     pub(crate) fn status_line_text(&self) -> Option<String> {
         self.bottom_pane.status_line_text()
-    }
-
-    pub(crate) fn clear_token_usage(&mut self) {
-        self.token_info = None;
     }
 }
 
