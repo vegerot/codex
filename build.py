@@ -10,8 +10,7 @@
 # over maximum optimization. Incremental compilation is off to save disk space
 # for daily unattended builds, accepting slower rebuilds. Reusing installed
 # resources avoids duplication but lets their versions change with updates.
-# Linux builds use 4 jobs, retrying with 3 then 2 if available RAM drops below
-# 1 GiB. These full-access packages do not need a separate sandbox executable.
+# Linux builds use 6 jobs. These full-access packages do not need a separate sandbox executable.
 # Restart the app/server to load rebuilt binaries. More: ~/ai-conversations/codex/README.md
 
 import json
@@ -88,7 +87,7 @@ def available_memory() -> int:
 
 
 def build_linux(command: list[str], env: dict[str, str]) -> None:
-    for jobs in (4, 3, 2):
+    for jobs in (6, 4, 2):
         minimum = available_memory()
         if minimum < MIN_AVAILABLE_BYTES:
             raise RuntimeError("Refusing build: less than 1 GiB RAM available")
