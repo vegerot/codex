@@ -1,0 +1,9 @@
+[Unit]
+Description=Build devbox Codex with SCM and announce noteworthy features
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/code/github.com/openai/codex
+ExecStart=/usr/bin/zsh -lc 'exec python3 "$HOME/.local/share/codex-rebuild/run.py"'
+TimeoutStartSec=infinity
+KillMode=control-group
