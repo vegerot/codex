@@ -25,6 +25,7 @@ impl ChatWidget {
         self.flush_answer_stream_with_separator();
         let now = Instant::now();
         let started_at = now.checked_sub(elapsed).unwrap_or(now);
+        self.deferred_compaction_token_info = None;
         self.status_state.compaction = Some(ActiveCompaction { id, started_at });
         self.bottom_pane.set_status_timer_origin(Some(started_at));
         self.bottom_pane.ensure_status_indicator();
@@ -33,6 +34,7 @@ impl ChatWidget {
 
     pub(super) fn clear_context_compaction(&mut self) {
         if self.status_state.compaction.take().is_some() {
+            self.deferred_compaction_token_info = None;
             self.bottom_pane
                 .set_status_timer_origin(/*started_at*/ None);
             self.set_status_header("Working".to_string());
@@ -50,7 +52,11 @@ impl ChatWidget {
                 );
                 message = format!("Context compacted · {elapsed}");
             }
+            let token_info = self.deferred_compaction_token_info.take();
             self.clear_context_compaction();
+            if let Some(token_info) = token_info {
+                self.apply_token_info(token_info);
+            }
         }
         self.add_info_message(message, /*hint*/ None);
     }

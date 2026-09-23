@@ -101,6 +101,25 @@ async fn manual_compaction_shows_status_before_backend_events() {
 }
 
 #[tokio::test]
+async fn context_percentage_updates_only_after_compaction_completes() {
+    let (mut chat, _rx, _ops) = make_chatwidget_manual(/*model_override*/ None).await;
+    chat.local_settings.tui.status_line = Some(vec!["context-used".to_string()]);
+    handle_token_count(&mut chat, Some(make_token_info(12_700, 13_000)));
+    chat.refresh_status_line();
+    insta::assert_snapshot!(status_line_text(&chat).unwrap(), @"Context 70% used");
+
+    chat.dispatch_command(SlashCommand::Compact);
+    chat.handle_server_notification(compaction_started("compact-1"), /*replay_kind*/ None);
+    handle_token_count(&mut chat, Some(make_token_info(12_100, 13_000)));
+    chat.refresh_status_line();
+    insta::assert_snapshot!(status_line_text(&chat).unwrap(), @"Context 70% used");
+
+    chat.handle_server_notification(compaction_completed("compact-1"), /*replay_kind*/ None);
+    chat.refresh_status_line();
+    insta::assert_snapshot!(status_line_text(&chat).unwrap(), @"Context 10% used");
+}
+
+#[tokio::test]
 async fn compaction_status_clears_when_turn_ends_without_item_completion() {
     for status in [
         AppServerTurnStatus::Completed,
