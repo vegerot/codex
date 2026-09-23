@@ -207,10 +207,16 @@ def main():
     assert cli_version == f"codex-cli {version_info['version']}", cli_version
     print(cli_version, flush=True)
     subprocess.run([str(output / "bin/codex-code-mode-host"), "--help"], check=True)
+    subprocess.run([str(output / "codex-resources/bwrap"), "--version"], check=True)
     metadata["total_seconds"] = round(time.monotonic() - started, 2)
     (output / "build-info.json").write_text(json.dumps(metadata, indent=2) + "\n")
     sums = []
-    for relative in ("bin/codex", "bin/codex-code-mode-host", "codex-path/rg", "codex-resources/bwrap"):
+    for relative in (
+        "bin/codex",
+        "bin/codex-code-mode-host",
+        "codex-path/rg",
+        "codex-resources/bwrap",
+    ):
         with (output / relative).open("rb") as source:
             digest = hashlib.file_digest(source, "sha256").hexdigest()
         sums.append(f"{digest}  {relative}\n")
