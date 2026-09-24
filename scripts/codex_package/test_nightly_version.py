@@ -4,7 +4,13 @@ from pathlib import Path
 
 import tomllib
 
-from scripts.codex_package.nightly_version import latest_stable_version, stamp_workspace
+from unittest.mock import patch
+
+from scripts.codex_package.nightly_version import (
+    latest_stable_version,
+    stamp_workspace,
+    nightly_version,
+)
 
 
 class NightlyVersionTests(unittest.TestCase):
@@ -64,6 +70,19 @@ checksum = "unchanged"
                             "checksum": "unchanged",
                         },
                     ],
+                },
+            )
+
+    def test_package_version_includes_upstream_release_and_source_commit(self):
+        with patch(
+            "scripts.codex_package.nightly_version.subprocess.check_output",
+            return_value="abc refs/tags/rust-v0.156.1\n",
+        ):
+            self.assertEqual(
+                nightly_version("a" * 40),
+                {
+                    "version": "0.156.1+dev.aaaaaaaaaaaa",
+                    "upstream_release_tag": "rust-v0.156.1",
                 },
             )
 

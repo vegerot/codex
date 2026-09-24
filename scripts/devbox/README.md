@@ -8,6 +8,20 @@ SCM runs its configured script path through Bash and has no entry-point argument
 field, so the small shell wrapper installs the pinned Rust toolchain and selects
 the Python script's SCM mode.
 
+Remote Control enrollment and the App Server initialization user-agent advertise
+the version from `codex-package.json`, using the same `BuildInfo` API as the
+execution server. Local `build.py` builds keep the Cargo
+workspace version (normally `0.0.0`) and write the upstream-based development
+version into the package metadata. Thus local `codex --version` and the Remote
+Control package version can differ intentionally. Local builds do not stamp or
+restore Cargo manifests. Run the installed package's `bin/codex`, not a bare
+Cargo output, to supply the Remote Control version.
+
+SCM retains its existing disposable-checkout stamping and matching executable,
+manifest, and build-metadata checks. Those packages also advertise their manifest
+version. Restart App Server after installation; package build information is
+cached at startup.
+
 - `run.py`: runs the saved `prompt.md`, stores reports/events under
   `~/.local/state/codex-rebuild`, and sends the completed report through `notify.py`.
   `python3 scripts/devbox/run.py --check` runs a no-change scheduler smoke test.
