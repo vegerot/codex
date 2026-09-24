@@ -89,6 +89,30 @@ async fn piped_child_has_no_console_with_or_without_job_containment() -> anyhow:
     }
     Ok(())
 }
+
+#[tokio::test]
+async fn pipe_helpers_do_not_allocate_windows_consoles() -> anyhow::Result<()> {
+    let python = find_python().expect("Python is required for the Windows console test");
+    for job in [None, Some(crate::JobObject::create_without_breakaway()?)] {
+        let mut command = crate::Command::new(&python);
+        command.envs(std::env::vars()).args([
+            "-c",
+            "import ctypes; print(ctypes.windll.kernel32.GetConsoleWindow())",
+        ]);
+        if let Some(job) = &job {
+            command.prepare_suspended_spawn(job);
+        }
+        let child = command.spawn()?;
+        if let Some(job) = &job {
+            job.assign_and_resume_process(child.id().expect("child PID"))?;
+        }
+        let output = child.wait_with_output().await?;
+        assert!(output.status.success(), "{output:?}");
+        pretty_assertions::assert_eq!(String::from_utf8(output.stdout)?.trim(), "0");
+    }
+    Ok(())
+}
+
 struct WindowsShell {
     name: &'static str,
     program: String,
