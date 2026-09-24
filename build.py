@@ -316,6 +316,23 @@ def build_scm() -> None:
     from scripts.codex_package.nightly_version import stamp_nightly_version
 
     started = time.monotonic()
+    # rust.compile.lyra has pkg-config but lacks bubblewrap's libcap headers.
+    # Install them on the disposable Linux worker before starting Cargo.
+    if subprocess.run(["pkg-config", "--exists", "libcap"], check=False).returncode:
+        privilege = [] if os.geteuid() == 0 else ["sudo", "-n"]
+        subprocess.run([*privilege, "apt-get", "update"], check=True)
+        subprocess.run(
+            [
+                *privilege,
+                "apt-get",
+                "install",
+                "--yes",
+                "--no-install-recommends",
+                "libcap-dev",
+            ],
+            check=True,
+        )
+    subprocess.run(["pkg-config", "--modversion", "libcap"], check=True)
     toolchain = tomllib.loads((REPO_ROOT / "codex-rs/rust-toolchain.toml").read_text())[
         "toolchain"
     ]["channel"]
