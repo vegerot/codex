@@ -57,9 +57,15 @@ async def connect():
         raise
 
 
-async def notify(thread_id, message):
+async def notify(thread_id, message=None, check=False):
     socket = await connect()
     try:
+        if check:
+            await request(
+                socket, 2, "thread/read", {"threadId": thread_id, "includeTurns": False}
+            )
+            print(f"Coordinator task is accessible: {thread_id}")
+            return
         await request(
             socket, 2, "thread/resume", {"threadId": thread_id, "excludeTurns": True}
         )
@@ -83,6 +89,8 @@ async def notify(thread_id, message):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--thread", required=True)
-    parser.add_argument("--message", required=True)
+    action = parser.add_mutually_exclusive_group(required=True)
+    action.add_argument("--message")
+    action.add_argument("--check", action="store_true")
     args = parser.parse_args()
-    asyncio.run(notify(args.thread, args.message))
+    asyncio.run(notify(args.thread, args.message, args.check))
