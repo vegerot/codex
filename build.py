@@ -11,6 +11,7 @@
 # for daily unattended builds, accepting slower rebuilds. Reusing installed
 # resources avoids duplication but lets their versions change with updates.
 # Linux builds use 6 jobs and include bwrap for daemon package validation.
+# Local builds set the package version used by Remote Control without editing Cargo files.
 # --scm builds a fresh, versioned Linux package on an SCM worker instead.
 # Restart the app/server to load rebuilt binaries. More: ~/ai-conversations/codex/README.md
 
@@ -22,6 +23,7 @@ import platform
 import shutil
 import signal
 import subprocess
+import sys
 import time
 from pathlib import Path
 
@@ -176,6 +178,18 @@ def install_release_binaries(spec: TargetSpec) -> None:
     print(f"Updated Codex package binaries at {PACKAGE_DIR}")
 
 
+def update_package_version(version: str) -> None:
+    metadata_path = PACKAGE_DIR / "codex-package.json"
+    metadata = json.loads(metadata_path.read_text())
+    metadata["version"] = version
+    temporary = metadata_path.with_name(f".{metadata_path.name}.tmp")
+    try:
+        temporary.write_text(json.dumps(metadata, indent=2) + "\n")
+        os.replace(temporary, metadata_path)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
 def cargo_command(spec: TargetSpec, toolchain: str | None = None) -> list[str]:
     command = ["cargo"]
     if toolchain is not None:
@@ -201,6 +215,8 @@ def cargo_command(spec: TargetSpec, toolchain: str | None = None) -> list[str]:
 
 
 def build_local() -> None:
+    from scripts.codex_package.nightly_version import nightly_version
+
     spec = host_spec()
     validate_existing_package(spec)
     env = {
@@ -208,13 +224,37 @@ def build_local() -> None:
         **RELEASE_ENV,
         **resolve_codex_v8_cargo_env(spec),
     }
-
+    commit = subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=REPO_ROOT, text=True
+    ).strip()
+    version_info = nightly_version(commit)
     command = cargo_command(spec)
     if spec.is_linux:
         build_linux(command, env)
     else:
         subprocess.run(command, cwd=REPO_ROOT / "codex-rs", env=env, check=True)
+    binary = cargo_profile_output_dir(spec, "release") / "codex"
+    cli_version = subprocess.check_output([str(binary), "--version"], text=True).strip()
+    # --version remains the Cargo crate version; Remote Control uses the package version.
+    expected = f"codex-cli {read_workspace_version()}"
+    if cli_version != expected:
+        raise RuntimeError(
+            f"Built Codex reported {cli_version!r}, expected {expected!r}"
+        )
     install_release_binaries(spec)
+    update_package_version(version_info["version"])
+    subprocess.run(
+        [
+            sys.executable,
+            str(REPO_ROOT / "scripts/codex_package/check_runtime_version.py"),
+            str(PACKAGE_DIR / "bin/codex"),
+        ],
+        check=True,
+    )
+    print(
+        f"{cli_version}; Remote Control package version {version_info['version']}",
+        flush=True,
+    )
 
 
 def scm_memory_status() -> tuple[int, int]:
@@ -388,6 +428,14 @@ def build_scm() -> None:
     ).strip()
     assert cli_version == f"codex-cli {version_info['version']}", cli_version
     print(cli_version, flush=True)
+    subprocess.run(
+        [
+            sys.executable,
+            str(REPO_ROOT / "scripts/codex_package/check_runtime_version.py"),
+            str(output / "bin/codex"),
+        ],
+        check=True,
+    )
     subprocess.run([str(output / "bin/codex-code-mode-host"), "--help"], check=True)
     subprocess.run([str(output / "codex-resources/bwrap"), "--version"], check=True)
     metadata["total_seconds"] = round(time.monotonic() - started, 2)

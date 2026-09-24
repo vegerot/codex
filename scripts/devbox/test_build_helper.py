@@ -31,18 +31,30 @@ class BuildTests(unittest.TestCase):
             patch.object(build.platform, "machine", return_value="arm64"),
             patch.object(build, "validate_existing_package"),
             patch.object(build, "resolve_codex_v8_cargo_env", return_value={}),
+            patch.object(
+                build.subprocess,
+                "check_output",
+                side_effect=["a" * 40 + "\n", "codex-cli 0.0.0\n"],
+            ),
             patch.object(build, "install_release_binaries") as install,
+            patch.object(build, "update_package_version") as update_version,
+            patch(
+                "scripts.codex_package.nightly_version.nightly_version",
+                return_value={"version": "0.156.1+dev.aaaaaaaaaaaa"},
+            ),
+            patch.object(build, "read_workspace_version", return_value="0.0.0"),
             patch.object(build, "build_linux") as linux,
             patch.object(build.subprocess, "run") as run,
         ):
             build.main()
-            command = run.call_args.args[0]
+            command = run.call_args_list[0].args[0]
             self.assertEqual(
                 command[command.index("--target") + 1], "aarch64-apple-darwin"
             )
             self.assertEqual(command.count("--bin"), 2)
             linux.assert_not_called()
             install.assert_called_once_with(build.TARGET_SPECS["aarch64-apple-darwin"])
+            update_version.assert_called_once_with("0.156.1+dev.aaaaaaaaaaaa")
 
     def test_cargo_commands_share_release_targets(self):
         spec = build.TARGET_SPECS["x86_64-unknown-linux-gnu"]
