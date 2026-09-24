@@ -92,6 +92,10 @@ impl Command {
     pub fn new(program: impl AsRef<OsStr>) -> Self {
         let program = program.as_ref();
         let mut inner = tokio::process::Command::new(program);
+        // Pipe-based helpers must not allocate consoles under a detached daemon.
+        // Interactive terminals use the separate ConPTY path.
+        #[cfg(windows)]
+        inner.creation_flags(winapi::um::winbase::CREATE_NO_WINDOW);
         inner
             .env_clear()
             .kill_on_drop(true)
@@ -243,6 +247,9 @@ impl Command {
     #[cfg(windows)]
     pub fn prepare_suspended_spawn(&mut self, job: &crate::JobObject) {
         job.prepare_suspended_spawn(&mut self.inner);
+        self.inner.creation_flags(
+            winapi::um::winbase::CREATE_SUSPENDED | winapi::um::winbase::CREATE_NO_WINDOW,
+        );
     }
 
     /// Reject original inputs that std replaced with a NUL-free placeholder.
