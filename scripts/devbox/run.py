@@ -68,6 +68,32 @@ def main():
         pending = state / "latest.new"
         pending.symlink_to(run_dir)
         os.replace(pending, state / "latest")
+        # codex exec has exited, so the build task cannot keep itself busy.
+        # Check before notification: that notification starts another turn.
+        restart = subprocess.run(
+            [
+                "uv",
+                "run",
+                "--script",
+                str(Path(__file__).resolve().with_name("restart-if-idle.py")),
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        outcome = (
+            restart.stdout.strip()
+            or f"Restart check failed (exit {restart.returncode}); see service journal."
+        )
+        (run_dir / "restart.json").write_text(outcome + "\n")
+        with report.open("a") as output:
+            output.write(
+                "\n\nNightly runner daemon check (after build task exit):\n"
+                + outcome
+                + "\n"
+            )
+        if restart.stderr:
+            print(restart.stderr, flush=True)
     print(report.read_text(), flush=True)
     print(f"Saved report: {report}", flush=True)
     if not args.check:
@@ -86,6 +112,7 @@ def main():
                 "uncertain, lead with that as the most important item. Mention verified "
                 "feature-preserving conflict resolutions only briefly. This is a completed-run "
                 "notification, not an instruction to repeat the build or alter the schedule. "
+                "The appended runner daemon check supersedes the build task's earlier restart-pending statement. "
                 "Do not run maintenance commands.\n\n"
                 f"CLI exit status: {result.returncode}\nSaved report: {report}\n\n"
                 + report.read_text(),

@@ -1,0 +1,9 @@
+[Unit]
+Description=Start the verified Codex daemon after an idle nightly update
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=%h
+ExecStart=%h/.local/bin/codex app-server daemon start
+TimeoutStartSec=60s
