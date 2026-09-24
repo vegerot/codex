@@ -153,7 +153,8 @@ pub fn get_codex_user_agent() -> String {
     // OS discovery can spawn subprocesses on Linux. Reuse it across requests,
     // while continuing to read the mutable originator and suffix below.
     static OS_INFO: LazyLock<os_info::Info> = LazyLock::new(os_info::get);
-    let build_version = env!("CARGO_PKG_VERSION");
+    let build_info = codex_build_info::BuildInfo::get();
+    let build_version = build_info.version();
     let os_info = &*OS_INFO;
     let originator = originator();
     let prefix = format!(
