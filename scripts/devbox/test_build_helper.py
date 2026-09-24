@@ -16,6 +16,15 @@ spec.loader.exec_module(build)
 
 
 class BuildTests(unittest.TestCase):
+    def test_scm_route_uses_worker_build(self):
+        with (
+            patch.object(build, "build_scm") as scm,
+            patch.object(build, "build_local") as local,
+        ):
+            build.main(scm=True)
+            scm.assert_called_once_with()
+            local.assert_not_called()
+
     def test_macos_route(self):
         with (
             patch.object(build.platform, "system", return_value="Darwin"),
@@ -34,6 +43,14 @@ class BuildTests(unittest.TestCase):
             self.assertEqual(command.count("--bin"), 2)
             linux.assert_not_called()
             install.assert_called_once_with(build.TARGET_SPECS["aarch64-apple-darwin"])
+
+    def test_cargo_commands_share_release_targets(self):
+        spec = build.TARGET_SPECS["x86_64-unknown-linux-gnu"]
+        local = build.cargo_command(spec)
+        scm = build.cargo_command(spec, "1.90.0")
+        self.assertEqual(scm[:2], ["cargo", "+1.90.0"])
+        self.assertEqual(scm[2:], local[1:])
+        self.assertEqual(local.count("--bin"), 3)
 
     def test_memory_abort_retries_real_processes(self):
         # Abort sleeping jobs 6 and 4 using synthetic measurements, not real RAM pressure.
