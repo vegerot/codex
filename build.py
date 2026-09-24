@@ -13,6 +13,8 @@
 # Linux builds use 6 jobs and include bwrap for daemon package validation.
 # Local builds set the package version used by Remote Control without editing Cargo files.
 # --scm builds a fresh, versioned Linux package on an SCM worker instead.
+# Windows builds and verifies a fresh package from committed HEAD, with resource
+# monitoring and 24 Cargo jobs by default. See scripts/windows/README.md.
 # Restart the app/server to load rebuilt binaries. More: ~/ai-conversations/codex/README.md
 
 import argparse
@@ -60,6 +62,7 @@ def host_spec() -> TargetSpec:
         ("Darwin", "x86_64"): "x86_64-apple-darwin",
         ("Linux", "aarch64"): "aarch64-unknown-linux-gnu",
         ("Linux", "x86_64"): "x86_64-unknown-linux-gnu",
+        ("Windows", "AMD64"): "x86_64-pc-windows-msvc",
     }
     host = (platform.system(), platform.machine())
     if host not in targets:
@@ -210,6 +213,13 @@ def cargo_command(spec: TargetSpec, toolchain: str | None = None) -> list[str]:
     )
     if spec.is_linux:
         command.extend(["--bin", "bwrap"])
+    if spec.is_windows:
+        for name in (
+            "codex-command-runner",
+            "codex-windows-sandbox-setup",
+            "codex-windows-sandbox-service",
+        ):
+            command.extend(["--bin", name])
     command.append("--timings")
     return command
 
@@ -471,9 +481,15 @@ def build_scm() -> None:
     print(json.dumps(metadata), flush=True)
 
 
-def main(scm: bool = False) -> None:
+def main(scm: bool = False, jobs: int | None = None) -> None:
+    if jobs is not None and (jobs < 1 or scm or platform.system() != "Windows"):
+        raise ValueError("--jobs requires a positive count and a local Windows build")
     if scm:
         build_scm()
+    elif platform.system() == "Windows":
+        from scripts.windows.build import build_windows
+
+        build_windows(REPO_ROOT, cargo_command(host_spec()), jobs=jobs or 24)
     else:
         build_local()
 
@@ -481,4 +497,6 @@ def main(scm: bool = False) -> None:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Build Codex locally or on SCM")
     parser.add_argument("--scm", action="store_true", help="create an SCM package")
-    main(parser.parse_args().scm)
+    parser.add_argument("--jobs", type=int, help="Windows Cargo jobs (default: 24)")
+    args = parser.parse_args()
+    main(args.scm, args.jobs)
