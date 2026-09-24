@@ -15,7 +15,20 @@ from pathlib import Path
 from websockets.asyncio.client import unix_connect
 
 
-async def notify(thread_id, message):
+async def request(socket, request_id, method, params):
+    await socket.send(
+        json.dumps({"id": request_id, "method": method, "params": params})
+    )
+    while line := await asyncio.wait_for(socket.recv(), timeout=60):
+        response = json.loads(line)
+        if response.get("id") == request_id:
+            if "error" in response:
+                raise RuntimeError(response["error"])
+            return response["result"]
+    raise RuntimeError("App Server closed before acknowledging the request")
+
+
+async def connect():
     socket = await unix_connect(
         str(
             Path(os.environ.get("CODEX_HOME", Path.home() / ".codex"))
@@ -27,20 +40,9 @@ async def notify(thread_id, message):
         max_size=8 * 1024 * 1024,
     )
 
-    async def request(request_id, method, params):
-        await socket.send(
-            json.dumps({"id": request_id, "method": method, "params": params})
-        )
-        while line := await asyncio.wait_for(socket.recv(), timeout=60):
-            response = json.loads(line)
-            if response.get("id") == request_id:
-                if "error" in response:
-                    raise RuntimeError(response["error"])
-                return response["result"]
-        raise RuntimeError("App Server closed before acknowledging the report")
-
     try:
         await request(
+            socket,
             1,
             "initialize",
             {
@@ -49,8 +51,20 @@ async def notify(thread_id, message):
             },
         )
         await socket.send(json.dumps({"method": "initialized"}))
-        await request(2, "thread/resume", {"threadId": thread_id, "excludeTurns": True})
+        return socket
+    except BaseException:
+        await socket.close()
+        raise
+
+
+async def notify(thread_id, message):
+    socket = await connect()
+    try:
+        await request(
+            socket, 2, "thread/resume", {"threadId": thread_id, "excludeTurns": True}
+        )
         receipt = await request(
+            socket,
             3,
             "thread/queue/add",
             {
