@@ -26,6 +26,13 @@ cached at startup.
 
 - `run.py`: runs the saved `prompt.md`, stores reports/events under
   `~/.local/state/codex-rebuild`, and sends the completed report through `notify.py`.
+  After the build task exits and before notification, `restart-if-idle.py` checks
+  for a verified package change and all loaded task statuses/queues. Busy,
+  approval/input-waiting, queued, or unknown states defer restart. SIGHUP drains
+  work that races the check without force-killing it, then the separate
+  `codex-rebuild-daemon-start.service` starts the selected package. The report
+  includes the outcome; busy runs leave restart pending until a later run.
+  `uv run --script scripts/devbox/restart-if-idle.py --check` only inspects.
   `python3 scripts/devbox/run.py --check` runs a no-change scheduler smoke test.
 - `install-scm.py`: downloads an exact-commit SCM artifact and verifies hashes,
   version, bwrap, V8 execution, and doctor. `--install` selects it for both CLI
@@ -43,11 +50,12 @@ cached at startup.
 Run tests from the repository root:
 
 ```sh
-python3 -B -m unittest discover --start-directory scripts/devbox --pattern 'test_*.py'
+uv run --with websockets==15.0.1 python -B -m unittest discover --start-directory scripts/devbox --pattern 'test_*.py'
 ```
 
 The installed `~/.local/share/codex-rebuild` symlink points to this directory.
 The systemd user service and timer symlink to the corresponding files here;
+`codex-rebuild-daemon-start.service` must also be linked into the user unit directory.
 the enabled timer symlink points to `~/.config/systemd/user/codex-rebuild.timer`.
 After changing units, run `systemctl --user daemon-reload`. The timer remains
 daily at 09:00 America/Los_Angeles, including daylight-saving transitions.
