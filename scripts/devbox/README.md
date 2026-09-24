@@ -2,8 +2,11 @@
 
 Linux-only orchestration for the personal fork. Build entry points stay at the
 repository root: `build.py` builds locally (macOS or Linux), while `build-scm.sh`
-and `build-scm.py` build and package on SCM workers. This directory owns the
+invokes `build.py --scm` to build and package on SCM workers. This directory owns the
 devbox scheduler and installation workflow, not another compiler implementation.
+SCM runs its configured script path through Bash and has no entry-point argument
+field, so the small shell wrapper installs the pinned Rust toolchain and selects
+the Python script's SCM mode.
 
 - `run.py`: runs the saved `prompt.md`, stores reports/events under
   `~/.local/state/codex-rebuild`, and sends the completed report through `notify.py`.
@@ -41,4 +44,4 @@ Each run reads its prompt once; changing the saved prompt does not steer an
 already-running task.
 
 Operational code lives here. Historical measurements and phone diagnostics
-remain in the ai-conversations repository under `codex/source-builds/`.
+remain in the `~/ai-conversations` repository under `codex/source-builds/`.
