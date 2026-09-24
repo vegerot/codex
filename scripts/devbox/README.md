@@ -7,6 +7,8 @@ devbox scheduler and installation workflow, not another compiler implementation.
 SCM runs its configured script path through Bash and has no entry-point argument
 field, so the small shell wrapper installs the pinned Rust toolchain and selects
 the Python script's SCM mode.
+The Linux SCM mode installs `libcap-dev` on the worker when `pkg-config` cannot
+find libcap, then verifies it before compiling the required `bwrap` executable.
 
 Remote Control enrollment and the App Server initialization user-agent advertise
 the version from `codex-package.json`, using the same `BuildInfo` API as the
