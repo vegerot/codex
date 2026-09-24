@@ -24,16 +24,21 @@ manifest, and build-metadata checks. Those packages also advertise their manifes
 version. Restart App Server after installation; package build information is
 cached at startup.
 
-- `run.py`: runs the saved `prompt.md`, stores reports/events under
-  `~/.local/state/codex-rebuild`, and sends the completed report through `notify.py`.
-  After the build task exits and before notification, `restart-if-idle.py` checks
-  for a verified package change and all loaded task statuses/queues. Busy,
-  approval/input-waiting, queued, or unknown states defer restart. SIGHUP drains
-  work that races the check without force-killing it, then the separate
-  `codex-rebuild-daemon-start.service` starts the selected package. The report
-  includes the outcome; busy runs leave restart pending until a later run.
+- `run.py`: snapshots `prompt.md` and queues a request into the existing task
+  through `notify.py`; it does not launch a separate `codex exec` session.
+  `coordinator.md` requires a fresh-context subagent and records its ID and report
+  under `~/.local/state/codex-rebuild/runs/`. Command evidence is retained there;
+  the worker's task contains its full transcript, replacing the old exec JSONL.
+  `python3 scripts/devbox/run.py --check` checks task access without queuing work.
+- `finish.py`: the coordinator schedules this independent systemd one-shot
+  before its final response. It waits up to 30 minutes for all tasks to be idle,
+  saves `restart.json`, and sends the restart outcome here. A run lock and saved
+  result prevent duplicate restarts. The coordinator and worker are never exempt.
+  `restart-if-idle.py` checks the selected verified package and all loaded task
+  statuses/queues. Busy, approval/input-waiting, queued, or unknown states defer
+  restart. SIGHUP drains any raced work without force-killing it; the separate
+  `codex-rebuild-daemon-start.service` starts the selected package.
   `uv run --script scripts/devbox/restart-if-idle.py --check` only inspects.
-  `python3 scripts/devbox/run.py --check` runs a no-change scheduler smoke test.
 - `install-scm.py`: downloads an exact-commit SCM artifact and verifies hashes,
   version, bwrap, V8 execution, and doctor. `--install` selects it for both CLI
   and managed daemon without restarting active tasks. Without that flag it only
@@ -61,8 +66,8 @@ After changing units, run `systemctl --user daemon-reload`. The timer remains
 daily at 09:00 America/Los_Angeles, including daylight-saving transitions.
 
 The notifier uses `uv run --script` with a pinned WebSocket dependency and sends
-reports to task `01a0cb94-2040-7fb0-a0b9-87132ed0aecc`. Change that thread argument
-in `run.py` to choose a different report destination. Preserve the existing
+requests/results to task `01a0cb94-2040-7fb0-a0b9-87132ed0aecc`. Change `THREAD`
+in `run.py` and `finish.py` together to choose another coordinator. Preserve the existing
 App Server and login environment; installing a package does not restart it.
 Each run reads its prompt once; changing the saved prompt does not steer an
 already-running task.
