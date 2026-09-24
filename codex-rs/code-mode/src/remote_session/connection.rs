@@ -156,6 +156,12 @@ impl Drop for CallerCancellation {
 impl Connection {
     pub(super) async fn spawn(host_program: &Path) -> Result<Self, ConnectionError> {
         let mut command = Command::new(host_program);
+        #[cfg(windows)]
+        {
+            // This protocol helper uses pipes, not an interactive console.
+            const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+            command.creation_flags(CREATE_NO_WINDOW);
+        }
         #[cfg(unix)]
         command.process_group(0);
         #[cfg(windows)]
