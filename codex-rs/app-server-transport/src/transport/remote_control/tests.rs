@@ -1708,8 +1708,43 @@ async fn remote_control_transport_clears_outgoing_buffer_when_backend_acks() {
     let _ = remote_task.await;
 }
 
+#[test]
+fn remote_control_enrollment_uses_package_version() {
+    // Run the real enrollment test in a fresh process: BuildInfo caches the
+    // executable's package metadata, so changing it in this process is invalid.
+    let package = TempDir::new().expect("create package");
+    let bin = package.path().join("bin");
+    std::fs::create_dir(&bin).expect("create bin directory");
+    let executable = bin.join(format!("enrollment-test{}", std::env::consts::EXE_SUFFIX));
+    std::fs::copy(
+        std::env::current_exe().expect("test executable"),
+        &executable,
+    )
+    .expect("copy test executable");
+    let version = "0.156.1+dev.package-test";
+    std::fs::write(
+        package.path().join("codex-package.json"),
+        serde_json::to_vec(&json!({"version": version})).expect("serialize manifest"),
+    )
+    .expect("write package manifest");
+    let output = std::process::Command::new(executable)
+        .arg("remote_control_http_mode_enrolls_before_connecting")
+        .arg("--nocapture")
+        .env("CODEX_TEST_REMOTE_CONTROL_PACKAGE_VERSION", version)
+        .output()
+        .expect("run packaged enrollment test");
+    assert!(
+        output.status.success() && String::from_utf8_lossy(&output.stdout).contains("1 passed"),
+        "stdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
 #[tokio::test]
 async fn remote_control_http_mode_enrolls_before_connecting() {
+    let expected_version = std::env::var("CODEX_TEST_REMOTE_CONTROL_PACKAGE_VERSION")
+        .unwrap_or_else(|_| codex_build_info::BuildInfo::get().version().to_string());
     let listener = TcpListener::bind("127.0.0.1:0")
         .await
         .expect("listener should bind");
@@ -1764,7 +1799,7 @@ async fn remote_control_http_mode_enrolls_before_connecting() {
             "name": expected_server_name,
             "os": std::env::consts::OS,
             "arch": std::env::consts::ARCH,
-            "app_server_version": env!("CARGO_PKG_VERSION"),
+            "app_server_version": expected_version,
             "installation_id": TEST_INSTALLATION_ID,
         })
     );

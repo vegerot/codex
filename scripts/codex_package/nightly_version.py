@@ -1,4 +1,4 @@
-"""Stamp a disposable SCM checkout with an upstream-based development version."""
+"""Stamp Codex builds with an upstream-based development version."""
 
 import re
 import subprocess
@@ -51,12 +51,19 @@ def stamp_workspace(rust_root, base_version, commit):
     return version
 
 
-def stamp_nightly_version(root, commit):
+def nightly_version(commit):
     refs = subprocess.check_output(
         ["git", "ls-remote", "--tags", "--refs", UPSTREAM, "rust-v*"],
         text=True,
         timeout=120,
     )
     base = latest_stable_version(refs)
-    version = stamp_workspace(root / "codex-rs", base, commit)
+    version = f"{base}+dev.{commit[:12]}"
     return {"version": version, "upstream_release_tag": f"rust-v{base}"}
+
+
+def stamp_nightly_version(root, commit):
+    info = nightly_version(commit)
+    base = info["upstream_release_tag"].removeprefix("rust-v")
+    stamp_workspace(root / "codex-rs", base, commit)
+    return info
