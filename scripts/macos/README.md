@@ -13,8 +13,9 @@ stable upstream version before submission, and supply:
 ```
 
 `build-scm.sh` selects `build-scm-macos.py` for that target. With no target override,
-it retains the existing Linux SCM build. The Mac path cross-compiles with Zig,
-SDK 15.5, and target-specific V8 inputs; it clears the image's x86 native flags.
+it retains the existing Linux SCM build. The Mac path cross-compiles the CLI,
+Code Mode host, and voice host from one commit with Zig, SDK 15.5, and the
+prepared voice SDK. It includes the matching voice runtime in the package.
 
 On the Mac, verify/download without installation:
 
@@ -22,11 +23,12 @@ On the Mac, verify/download without installation:
 python3 scripts/macos/install_scm.py --version-id <id> --commit <full-source-sha>
 ```
 
-Add `--install` to update the two executables and package version in the existing
-`codex-rs/target/codex-package-release` package. Resource symlinks and the CLI path
-are preserved; running servers are not restarted. Replacement is per executable,
-not atomic for the whole package. Receipts go to `~/.local/state/codex-macos-build/`.
-The scheduled task runs the installed package's doctor and other final checks.
+Add `--install` to prepare and place the complete package under
+`~/.local/share/codex-macos-build/packages/<source-commit>/`, then switch
+`~/.local/bin/codex` and `codex-code-mode-host` to it. The installer relocates
+the voice helper's bundled library references and signs it on the Mac. Existing
+processes are not restarted. Receipts go to `~/.local/state/codex-macos-build/`.
+The scheduled task still needs to be updated to use this installation path.
 
 The scheduler definition lives in the ai-conversations archive under
 `codex/source-builds/macos-automations/rebuild-codex-cli/automation.toml`.

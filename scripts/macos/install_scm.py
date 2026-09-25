@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
-"""Verify an exact-source macOS SCM package, then update the existing Mac package."""
+"""Verify and select a complete, exact-source macOS SCM package."""
 
 import argparse
 import hashlib
 import json
+import os
 import platform
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import tarfile
@@ -15,6 +17,9 @@ from urllib.request import Request, urlopen
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 import build  # noqa: E402
+
+PACKAGES = Path.home() / ".local/share/codex-macos-build/packages"
+LAUNCHERS = Path.home() / ".local/bin"
 
 
 def cli_json(*args):
@@ -43,19 +48,18 @@ def verify(package, commit):
         raise RuntimeError("Wrong SCM source commit or target")
     if manifest["target"] != info["target"] or manifest["version"] != info["version"]:
         raise RuntimeError("Inconsistent SCM package metadata")
-    checksums = dict(
-        (name, digest)
-        for digest, name in (
-            line.split(maxsplit=1)
-            for line in (package / "SHA256SUMS").read_text().splitlines()
-        )
-    )
-    for name in ("bin/codex", "bin/codex-code-mode-host", "codex-path/rg"):
-        if name not in checksums:
-            raise RuntimeError(f"Missing required checksum: {name}")
-    for name, digest in checksums.items():
+    voice = package / "codex-resources/voice"
+    voice_manifest = json.loads((voice / "manifest.json").read_text())
+    if (
+        voice_manifest["buildCommit"] != commit
+        or voice_manifest["appVersion"] != info["version"]
+        or voice_manifest["appTarget"] != info["target"]
+        or voice_manifest["voiceTarget"] != info["target"]
+    ):
+        raise RuntimeError("Voice manifest differs from SCM package")
+    for name, digest in voice_manifest["sha256"].items():
         if sha256(package / name) != digest:
-            raise RuntimeError(f"SCM checksum mismatch: {name}")
+            raise RuntimeError(f"SCM voice checksum mismatch: {name}")
     build.validate_package_dir(
         package,
         build.PACKAGE_VARIANTS["codex"],
@@ -93,22 +97,51 @@ def verify(package, commit):
     return info
 
 
+def prepare_voice(package, commit):
+    voice = package / "codex-resources/voice"
+    helper = voice / "bin/codex-voice-host"
+    changes = []
+    for line in subprocess.check_output(
+        ["otool", "-L", str(helper)], text=True
+    ).splitlines()[1:]:
+        old = line.strip().split(" (", 1)[0]
+        if old.startswith("/Users/"):
+            library = voice / "lib" / Path(old).name
+            if not library.is_file():
+                raise RuntimeError(f"Missing bundled voice library: {library}")
+            changes.extend(["-change", old, f"@executable_path/../lib/{library.name}"])
+    if changes:
+        subprocess.run(["install_name_tool", *changes, str(helper)], check=True)
+        subprocess.run(["codesign", "--force", "--sign", "-", str(helper)], check=True)
+    subprocess.run(["codesign", "--verify", "--strict", str(helper)], check=True)
+    actual = subprocess.check_output([str(helper), "--build-commit"], text=True).strip()
+    if actual != commit:
+        raise RuntimeError("Voice helper source commit differs from SCM package")
+    manifest_path = voice / "manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+    for name in manifest["sha256"]:
+        manifest["sha256"][name] = sha256(package / name)
+    manifest_path.write_text(json.dumps(manifest, indent=2) + "\n")
+
+
+def replace_link(name, target):
+    link = LAUNCHERS / name
+    temporary = LAUNCHERS / f".{name}.scm-tmp"
+    temporary.unlink(missing_ok=True)
+    temporary.symlink_to(target)
+    os.replace(temporary, link)
+
+
 def install(package, info):
-    build.validate_existing_package(build.TARGET_SPECS["aarch64-apple-darwin"])
+    destination = PACKAGES / info["commit"]
+    if destination.exists():
+        raise RuntimeError(f"Package already installed: {destination}")
+    PACKAGES.mkdir(parents=True, exist_ok=True)
+    shutil.move(str(package), destination)
+    LAUNCHERS.mkdir(parents=True, exist_ok=True)
     for name in ("codex", "codex-code-mode-host"):
-        build.atomic_copy(package / "bin" / name, build.PACKAGE_DIR / "bin" / name)
-        if sha256(package / "bin" / name) != sha256(build.PACKAGE_DIR / "bin" / name):
-            raise RuntimeError(f"Installed hash mismatch: {name}")
-    build.update_package_version(info["version"])
-    subprocess.run(
-        [
-            sys.executable,
-            str(ROOT / "scripts/codex_package/check_runtime_version.py"),
-            str(build.PACKAGE_DIR / "bin/codex"),
-        ],
-        check=True,
-        timeout=60,
-    )
+        replace_link(name, destination / "bin" / name)
+    return destination
 
 
 def main():
@@ -144,19 +177,19 @@ def main():
         with tarfile.open(archive) as bundle:
             bundle.extractall(package, filter="data")
         info = verify(package, args.commit)
+        prepare_voice(package, args.commit)
         hashes = {
             name: sha256(package / "bin" / name)
             for name in ("codex", "codex-code-mode-host")
         }
-        if args.install:
-            install(package, info)
+        destination = install(package, info) if args.install else package
         receipt = {
             "backend": "scm",
             "version_id": args.version_id,
             "scm_version": metadata["version"],
             "build": info,
             "binary_hashes": hashes,
-            "package": str(build.PACKAGE_DIR),
+            "package": str(destination) if args.install else None,
             "installed": args.install,
         }
         state = Path.home() / ".local/state/codex-macos-build"

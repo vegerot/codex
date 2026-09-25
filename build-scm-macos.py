@@ -11,6 +11,7 @@ import time
 import zipfile
 from urllib.request import urlopen
 import shutil
+import sys
 
 from build import RELEASE_ENV, REPO_ROOT, scm_memory_status
 from scripts.codex_package.layout import build_package_dir
@@ -66,7 +67,7 @@ def main():
         "https://github.com/joseluisq/macosx-sdks/releases/download/15.5/MacOSX15.5.sdk.tar.xz",
         "c15cf0f3f17d714d1aa5a642da8e118db53d79429eb015771ba816aa7c6c1cbd",
     )
-    zigbuild = next(cache.rglob("cargo-zigbuild"))
+    zigbuild = next(p for p in cache.rglob("cargo-zigbuild") if p.is_file())
     assert zigbuild.is_file(), zigbuild
     spec = TARGET_SPECS["aarch64-apple-darwin"]
     toolchain = os.environ["CODEX_TOOLCHAIN"]
@@ -94,82 +95,63 @@ def main():
     ):
         env.pop(name, None)
     run(["zig", "version"], env=env)
-    probe = cache / "probe"
-    (probe / "src").mkdir(parents=True, exist_ok=True)
-    (probe / "Cargo.toml").write_text(
-        '[package]\nname="macos-link-probe"\nversion="0.1.0"\nedition="2021"\n'
+    archive = REPO_ROOT / "voice-experiment-sdk.tar.gz"
+    assert (
+        hashlib.sha256(archive.read_bytes()).hexdigest()
+        == "e16b158a2c5fdedb2cb448ce9791c2aad1ba118ca9a35a93a19b8a83f3159855"
     )
-    (probe / "src/main.rs").write_text("""#[link(name = "Security", kind = "framework")]
-extern "C" { fn SecRandomCopyBytes(rnd: *const u8, count: usize, bytes: *mut u8) -> i32; }
-fn main() {
-    let mut bytes = [0u8; 16];
-    assert_eq!(unsafe { SecRandomCopyBytes(std::ptr::null(), bytes.len(), bytes.as_mut_ptr()) }, 0);
-    println!("macOS cross-build: Rust std and Security framework OK");
-}
-""")
+    inputs = cache / "voice-experiment-inputs"
+    inputs.mkdir(exist_ok=True)
+    run(["tar", "-xzf", str(archive), "-C", str(inputs)])
+    wrapper = cache / "voice-pkg-config"
+    wrapper.write_text('#!/bin/sh\nexec /usr/bin/pkg-config --define-prefix "$@"\n')
+    wrapper.chmod(0o755)
+    commit = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+    env.update(
+        {
+            "PKG_CONFIG": str(wrapper),
+            "PKG_CONFIG_ALLOW_CROSS": "1",
+            "PKG_CONFIG_SYSROOT_DIR": "/",
+            "PKG_CONFIG_LIBDIR": str(inputs / "sdk/lib/pkgconfig"),
+            "PKG_CONFIG_PATH": "",
+            "STABLE_GIT_COMMIT": commit,
+            "RUSTFLAGS": "-C force-frame-pointers=yes -C link-arg=-Wl,-rpath,@executable_path/../lib",
+        }
+    )
+    base = os.environ["CUSTOM_CODEX_BASE_VERSION"]
+    stamped = stamp_workspace(REPO_ROOT / "codex-rs", base, commit)
+    # Upstream private voice assembly expects the full commit as build metadata.
+    version = f"{base}+{commit}"
+    for name in ("Cargo.toml", "Cargo.lock"):
+        path = REPO_ROOT / "codex-rs" / name
+        path.write_text(path.read_text().replace(stamped, version))
+    env.update(resolve_codex_v8_cargo_env(spec, cache_root=cache / "v8"))
+    begin = time.monotonic()
     run(
-        ["cargo", f"+{toolchain}", "zigbuild", "--release", "--target", spec.target],
-        cwd=probe,
+        [
+            "cargo",
+            f"+{toolchain}",
+            "zigbuild",
+            "--locked",
+            "--release",
+            "--target",
+            spec.target,
+            "--bin",
+            "codex-voice-host",
+            "--bin",
+            "codex",
+            "--bin",
+            "codex-code-mode-host",
+        ],
+        cwd=REPO_ROOT / "codex-rs",
         env=env,
     )
-    run(["file", str(cache / "target" / spec.target / "release/macos-link-probe")])
-    commit = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
-    # Resolve the stable version on the submitting Mac, before freezing build inputs.
-    base_version = os.environ["CUSTOM_CODEX_BASE_VERSION"]
-    version = {
-        "version": stamp_workspace(REPO_ROOT / "codex-rs", base_version, commit),
-        "upstream_release_tag": f"rust-v{base_version}",
-    }
-    env.update(resolve_codex_v8_cargo_env(spec, cache_root=cache / "v8"))
-    command = [
-        "cargo",
-        f"+{toolchain}",
-        "zigbuild",
-        "--locked",
-        "--release",
-        "--target",
-        spec.target,
-        "--bin",
-        "codex",
-        "--bin",
-        "codex-code-mode-host",
-        "--timings",
-    ]
-    print("+", " ".join(command), flush=True)
-    build_started = time.monotonic()
-    process = subprocess.Popen(
-        command, cwd=REPO_ROOT / "codex-rs", env=env, start_new_session=True
-    )
-    minimum = scm_memory_status()[1]
-    last_report = 0
-    try:
-        while process.poll() is None:
-            available = scm_memory_status()[1]
-            minimum = min(minimum, available)
-            if available < 1024**3:
-                raise RuntimeError(
-                    "Less than 1 GiB available; stopping experimental build"
-                )
-            if time.monotonic() - last_report >= 30:
-                print(
-                    f"Cross-build heartbeat: available={available / 1024**3:.2f} GiB",
-                    flush=True,
-                )
-                last_report = time.monotonic()
-            time.sleep(1)
-        if process.returncode:
-            raise subprocess.CalledProcessError(process.returncode, command)
-    finally:
-        if process.poll() is None:
-            os.killpg(process.pid, signal.SIGTERM)
-            process.wait()
-    compile_seconds = round(time.monotonic() - build_started, 2)
     bins = cache / "target" / spec.target / "release"
-    output = REPO_ROOT / "output"
-    output.mkdir(exist_ok=True)
+    package = REPO_ROOT / "voice-base-package"
+    package.mkdir()
     build_package_dir(
-        output,
-        version["version"],
+        package,
+        version,
         PACKAGE_VARIANTS["codex"],
         spec,
         PackageInputs(
@@ -182,33 +164,32 @@ fn main() {
             codex_windows_sandbox_setup_bin=None,
         ),
     )
-    for name in ("LICENSE", "NOTICE"):
-        (output / name).write_bytes((REPO_ROOT / name).read_bytes())
-    (output / "macos-link-probe").write_bytes((bins / "macos-link-probe").read_bytes())
-    (output / "macos-link-probe").chmod(0o755)
-    metadata = {
-        "commit": commit,
-        **version,
-        "target": spec.target,
-        "build_host": os.uname().sysname,
-        "zig": "0.16.0",
-        "cargo_zigbuild": "0.23.4",
-        "sdk": "15.5",
-        "deployment_target": "14.0",
-        "compile_seconds": compile_seconds,
-        "total_seconds": round(time.monotonic() - started, 2),
-        "minimum_available_gib": round(minimum / 1024**3, 3),
-    }
-    (output / "build-info.json").write_text(json.dumps(metadata, indent=2) + "\n")
-    sums = []
-    for binary in sorted(p for p in output.rglob("*") if p.is_file()):
-        with binary.open("rb") as src:
-            sums.append(
-                f"{hashlib.file_digest(src, 'sha256').hexdigest()}  {binary.relative_to(output)}\n"
-            )
-    (output / "SHA256SUMS").write_text("".join(sums))
-    run(["file", str(output / "bin/codex"), str(output / "bin/codex-code-mode-host")])
-    print(json.dumps(metadata), flush=True)
+    sys.path.insert(0, str(REPO_ROOT / "third_party/voice"))
+    from assemble_package import assemble
+
+    output = REPO_ROOT / "output"
+    assemble(
+        package,
+        bins / "codex-voice-host",
+        spec.target,
+        commit,
+        output,
+        runtime=inputs / "runtime",
+    )
+    (output / "build-info.json").write_text(
+        json.dumps(
+            {
+                "commit": commit,
+                "target": spec.target,
+                "version": version,
+                "compile_seconds": round(time.monotonic() - begin, 2),
+                "total_seconds": round(time.monotonic() - started, 2),
+            },
+            indent=2,
+        )
+        + "\n"
+    )
+    print((output / "build-info.json").read_text(), flush=True)
 
 
 if __name__ == "__main__":
