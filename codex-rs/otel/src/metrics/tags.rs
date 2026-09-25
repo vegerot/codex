@@ -52,7 +52,13 @@ impl<'a> SessionMetricTagValues<'a> {
         Self::push_optional_tag(&mut tags, ORIGINATOR_TAG, Some(self.originator))?;
         Self::push_optional_tag(&mut tags, SERVICE_NAME_TAG, self.service_name)?;
         Self::push_optional_tag(&mut tags, MODEL_TAG, Some(self.model))?;
-        Self::push_optional_tag(&mut tags, APP_VERSION_TAG, Some(self.app_version))?;
+        // Cargo build metadata may contain `+`, which metric tags reject. The package version
+        // identifies the release without giving every local build a separate metric series.
+        let app_version = self
+            .app_version
+            .split_once('+')
+            .map_or(self.app_version, |(version, _)| version);
+        Self::push_optional_tag(&mut tags, APP_VERSION_TAG, Some(app_version))?;
         Ok(tags)
     }
 
@@ -130,5 +136,21 @@ mod tests {
                 (APP_VERSION_TAG, "1.2.3"),
             ]
         );
+    }
+
+    #[test]
+    fn session_metric_tags_accept_cargo_build_metadata() {
+        let tags = SessionMetricTagValues {
+            auth_mode: None,
+            session_source: "cli",
+            originator: "codex-tui",
+            service_name: None,
+            model: "gpt-6-luna",
+            app_version: "0.156.1+dev.d8795157f3e4",
+        }
+        .into_tags()
+        .expect("tags");
+
+        assert_eq!(tags.last(), Some(&(APP_VERSION_TAG, "0.156.1")));
     }
 }
