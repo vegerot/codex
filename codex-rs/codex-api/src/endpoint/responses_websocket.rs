@@ -818,7 +818,10 @@ async fn run_websocket_response_stream(
                 }
                 match process_responses_event(event) {
                     Ok(Some(event)) => {
-                        if let ResponseEvent::Created { response_id: id } = &event {
+                        if let ResponseEvent::Created {
+                            response_id: id, ..
+                        } = &event
+                        {
                             response_id.clone_from(id);
                         }
                         let is_completed = matches!(event, ResponseEvent::Completed { .. });
