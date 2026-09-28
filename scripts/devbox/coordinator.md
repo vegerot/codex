@@ -25,9 +25,11 @@ At the very end, only if `restart.json` is absent, the worker is finished, and
 `report.md` exists, schedule
 the external finisher before sending your final response:
 
-`systemd-run --user --unit=codex-nightly-finish-<run-directory-name> --on-active=20s --timer-property=AccuracySec=1s --property=Type=oneshot --collect /usr/bin/python3 <source-repository>/scripts/devbox/finish.py --run-dir <run-directory>`
+`systemd-run --user --unit=codex-nightly-finish-<run-directory-name> --on-active=20s --timer-property=AccuracySec=1s --property=Type=oneshot --collect /usr/bin/zsh -lc 'exec python3 "$1" --run-dir "$2"' nightly-finisher <source-repository>/scripts/devbox/finish.py <run-directory>`
 
-Use actual absolute paths. If that unit is already scheduled or running, retain
+Use actual absolute paths. The login shell supplies the user's PATH, including
+uv; the two paths are positional arguments, not interpolated shell code.
+If that unit is already scheduled or running, retain
 it. The finisher checks all tasks, including this task and the worker; never
 exclude either. It waits up to 30 minutes for idle, uses the graceful restart
 helper, saves `restart.json`, and posts the restart result here. It survives the
