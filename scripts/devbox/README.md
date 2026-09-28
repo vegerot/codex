@@ -63,7 +63,7 @@ The systemd user service and timer symlink to the corresponding files here;
 `codex-rebuild-daemon-start.service` must also be linked into the user unit directory.
 the enabled timer symlink points to `~/.config/systemd/user/codex-rebuild.timer`.
 After changing units, run `systemctl --user daemon-reload`. The timer remains
-daily at 09:00 America/Los_Angeles, including daylight-saving transitions.
+daily at 05:00 America/Los_Angeles, including daylight-saving transitions.
 
 The notifier uses `uv run --script` with a pinned WebSocket dependency and sends
 requests/results to task `01a0cb94-2040-7fb0-a0b9-87132ed0aecc`. Change `THREAD`
