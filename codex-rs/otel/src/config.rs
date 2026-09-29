@@ -111,10 +111,13 @@ mod tests {
     use super::resolve_exporter;
 
     #[test]
-    fn statsig_default_metrics_exporter_is_disabled_in_debug_builds() {
-        assert!(matches!(
-            resolve_exporter(&OtelExporter::Statsig),
-            OtelExporter::None
-        ));
+    fn statsig_default_metrics_exporter_follows_build_mode() {
+        let resolved = resolve_exporter(&OtelExporter::Statsig);
+        if cfg!(debug_assertions) {
+            assert!(matches!(resolved, OtelExporter::None));
+        } else {
+            assert!(matches!(resolved, OtelExporter::OtlpHttp { endpoint, .. }
+                if endpoint == super::STATSIG_OTLP_HTTP_ENDPOINT));
+        }
     }
 }

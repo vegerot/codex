@@ -13,7 +13,8 @@ or which scheduled tasks are enabled.
 - **More timing diagnostics:** the terminal’s existing runtime metrics include
   synchronous hook counts/duration and local command counts/duration. Inference
   traces record request start, response creation, first model delta, completion,
-  and server timestamps when supplied, including WebSocket responses.
+  and server timestamps when supplied, including WebSocket responses. Local
+  timing and tool metrics remain visible even when excluded from Statsig export.
   [Sources](codex-rs/otel/src/metrics/runtime_metrics.rs) ·
   [Trace fields](codex-rs/rollout-trace/src/model/conversation.rs)
 - **Stable context usage during compaction:** retain the displayed usage until
@@ -34,12 +35,14 @@ or which scheduled tasks are enabled.
 ## Build and maintenance tooling
 
 - **Personal local builds:** [`build.py`](build.py) rebuilds matching CLI and Code
-  Mode binaries on macOS/Linux using matching V8 inputs and complete versioned packages;
+  Mode binaries on macOS/Linux using matching V8 inputs and complete versioned
+  packages;
   Linux includes bubblewrap and memory-aware build concurrency.
 - **SCM build-service packages:** versioned Linux packages and cross-compiled
   Apple Silicon macOS packages, with exact-source verification/install helpers.
   Linux includes bubblewrap; macOS includes a matching voice host/runtime,
-  library relocation/signing, and VPN-aware backend selection. Artifact acquisition and verification are separate from activation. Unix
+  library relocation/signing, and VPN-aware backend selection. Artifact acquisition
+  and verification are separate from activation. Unix
   activation selects the package for CLI and daemon and disables upstream
   automatic updates; a separate worker restarts after publication and idle checks.
   [Linux details](scripts/devbox/README.md) · [Mac details](scripts/macos/README.md)
