@@ -64,3 +64,5 @@ Compare the current stack and net diff with:
 sl log --rev 'only(., upstream/main)' --template '{node|short} {desc|firstline}\n' --pager=never
 sl diff --rev upstream/main --stat --pager=never
 ```
+
+- Nightly builds share source-reconciliation instructions and four platform profiles; only explicitly missing patches are replayed.
