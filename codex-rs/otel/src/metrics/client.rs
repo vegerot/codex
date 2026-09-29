@@ -104,16 +104,25 @@ pub(super) struct MetricsClientInner {
     pub(super) network_policy: codex_http_client::NetworkPolicy,
     meter_provider: SdkMeterProvider,
     meter: Meter,
-    counters: Mutex<HashMap<InstrumentKey, Counter<u64>>>,
-    gauges: Mutex<HashMap<InstrumentKey, Gauge<i64>>>,
-    histograms: Mutex<HashMap<String, Histogram<f64>>>,
-    duration_histograms: Mutex<HashMap<InstrumentKey, Histogram<f64>>>,
+    counters: Mutex<HashMap<InstrumentKey, Vec<Counter<u64>>>>,
+    gauges: Mutex<HashMap<InstrumentKey, Vec<Gauge<i64>>>>,
+    histograms: Mutex<HashMap<String, Vec<Histogram<f64>>>>,
+    duration_histograms: Mutex<HashMap<InstrumentKey, Vec<Histogram<f64>>>>,
     runtime_reader: Option<Arc<ManualReader>>,
+    // Local snapshots have no exporter and must not inherit Statsig exclusions.
+    runtime: Option<(SdkMeterProvider, Meter)>,
     statsig_disabled_metrics: &'static [&'static str],
     default_tags: BTreeMap<String, String>,
 }
 
 impl MetricsClientInner {
+    fn meters(&self, name: &str) -> impl Iterator<Item = &Meter> {
+        self.runtime
+            .iter()
+            .map(|(_, meter)| meter)
+            .chain((!self.statsig_disabled_metrics.contains(&name)).then_some(&self.meter))
+    }
+
     fn counter(
         &self,
         name: &str,
@@ -130,10 +139,6 @@ impl MetricsClientInner {
         }
         let attributes = self.attributes(tags)?;
 
-        if self.statsig_disabled_metrics.contains(&name) {
-            return Ok(());
-        }
-
         let mut counters = self
             .counters
             .lock()
@@ -144,13 +149,21 @@ impl MetricsClientInner {
             description: description.map(str::to_string),
         };
         let counter = counters.entry(key).or_insert_with(|| {
-            let builder = self.meter.u64_counter(name.to_string());
-            match description {
-                Some(description) => builder.with_description(description.to_string()).build(),
-                None => builder.build(),
-            }
+            self.meters(name)
+                .map(|meter| {
+                    let builder = meter.u64_counter(name.to_string());
+                    match description {
+                        Some(description) => {
+                            builder.with_description(description.to_string()).build()
+                        }
+                        None => builder.build(),
+                    }
+                })
+                .collect()
         });
-        counter.add(inc as u64, &attributes);
+        for instrument in counter {
+            instrument.add(inc as u64, &attributes);
+        }
         Ok(())
     }
 
@@ -164,22 +177,24 @@ impl MetricsClientInner {
         validate_metric_name(name)?;
         let attributes = self.attributes(tags)?;
 
-        if self.statsig_disabled_metrics.contains(&name) {
-            return Ok(());
-        }
-
         let mut histograms = self
             .histograms
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let histogram = histograms.entry(name.to_string()).or_insert_with(|| {
-            let builder = self.meter.f64_histogram(name.to_string());
-            match boundaries {
-                Some(boundaries) => builder.with_boundaries(boundaries.to_vec()).build(),
-                None => builder.build(),
-            }
+            self.meters(name)
+                .map(|meter| {
+                    let builder = meter.f64_histogram(name.to_string());
+                    match boundaries {
+                        Some(boundaries) => builder.with_boundaries(boundaries.to_vec()).build(),
+                        None => builder.build(),
+                    }
+                })
+                .collect()
         });
-        histogram.record(value as f64, &attributes);
+        for instrument in histogram {
+            instrument.record(value as f64, &attributes);
+        }
         Ok(())
     }
 
@@ -193,10 +208,6 @@ impl MetricsClientInner {
         validate_metric_name(name)?;
         let attributes = self.attributes(tags)?;
 
-        if self.statsig_disabled_metrics.contains(&name) {
-            return Ok(());
-        }
-
         let mut gauges = self
             .gauges
             .lock()
@@ -207,13 +218,21 @@ impl MetricsClientInner {
             description: description.map(str::to_string),
         };
         let gauge = gauges.entry(key).or_insert_with(|| {
-            let builder = self.meter.i64_gauge(name.to_string());
-            match description {
-                Some(description) => builder.with_description(description.to_string()).build(),
-                None => builder.build(),
-            }
+            self.meters(name)
+                .map(|meter| {
+                    let builder = meter.i64_gauge(name.to_string());
+                    match description {
+                        Some(description) => {
+                            builder.with_description(description.to_string()).build()
+                        }
+                        None => builder.build(),
+                    }
+                })
+                .collect()
         });
-        gauge.record(value, &attributes);
+        for instrument in gauge {
+            instrument.record(value, &attributes);
+        }
         Ok(())
     }
 
@@ -227,16 +246,16 @@ impl MetricsClientInner {
         validate_metric_name(name)?;
         let attributes = self.attributes(tags)?;
 
-        if self.statsig_disabled_metrics.contains(&name) {
-            return Ok(());
+        let observe = Arc::new(observe);
+        for meter in self.meters(name) {
+            let observe = Arc::clone(&observe);
+            let attributes = attributes.clone();
+            let _gauge = meter
+                .i64_observable_gauge(name.to_string())
+                .with_description(description.to_string())
+                .with_callback(move |observer| observer.observe(observe(), &attributes))
+                .build();
         }
-
-        let _gauge = self
-            .meter
-            .i64_observable_gauge(name.to_string())
-            .with_description(description.to_string())
-            .with_callback(move |observer| observer.observe(observe(), &attributes))
-            .build();
         Ok(())
     }
 
@@ -252,10 +271,6 @@ impl MetricsClientInner {
         validate_metric_name(name)?;
         let attributes = self.attributes(tags)?;
 
-        if self.statsig_disabled_metrics.contains(&name) {
-            return Ok(());
-        }
-
         let mut histograms = self
             .duration_histograms
             .lock()
@@ -266,14 +281,20 @@ impl MetricsClientInner {
             description: Some(description.to_string()),
         };
         let histogram = histograms.entry(key).or_insert_with(|| {
-            self.meter
-                .f64_histogram(name.to_string())
-                .with_unit(unit)
-                .with_description(description.to_string())
-                .with_boundaries(boundaries.to_vec())
-                .build()
+            self.meters(name)
+                .map(|meter| {
+                    meter
+                        .f64_histogram(name.to_string())
+                        .with_unit(unit)
+                        .with_description(description.to_string())
+                        .with_boundaries(boundaries.to_vec())
+                        .build()
+                })
+                .collect()
         });
-        histogram.record(value, &attributes);
+        for instrument in histogram {
+            instrument.record(value, &attributes);
+        }
         Ok(())
     }
 
@@ -307,6 +328,11 @@ impl MetricsClientInner {
         self.meter_provider
             .shutdown()
             .map_err(|source| MetricsError::ProviderShutdown { source })?;
+        if let Some((provider, _)) = &self.runtime {
+            provider
+                .shutdown()
+                .map_err(|source| MetricsError::ProviderShutdown { source })?;
+        }
         Ok(())
     }
 }
@@ -358,9 +384,18 @@ impl MetricsClient {
             )
         });
 
+        let runtime = runtime_reader.as_ref().map(|reader| {
+            let provider = SdkMeterProvider::builder()
+                .with_resource(resource.clone())
+                .with_reader(SharedManualReader::new(Arc::clone(reader)))
+                .build();
+            let meter = provider.meter(METER_NAME);
+            (provider, meter)
+        });
+
         let (meter_provider, meter) = match exporter {
             MetricsExporter::InMemory(exporter) => {
-                build_provider(resource, exporter, export_interval, runtime_reader.clone())
+                build_provider(resource, exporter, export_interval)
             }
             MetricsExporter::Otlp(exporter) => {
                 let exporter = crate::network_policy::PolicyExporter {
@@ -371,7 +406,7 @@ impl MetricsClient {
                     )?,
                     policy: http_client_factory.network_policy().clone(),
                 };
-                build_provider(resource, exporter, export_interval, runtime_reader.clone())
+                build_provider(resource, exporter, export_interval)
             }
         };
 
@@ -385,6 +420,7 @@ impl MetricsClient {
                 histograms: Mutex::new(HashMap::new()),
                 duration_histograms: Mutex::new(HashMap::new()),
                 runtime_reader,
+                runtime,
                 statsig_disabled_metrics,
                 default_tags,
             }),
@@ -570,7 +606,6 @@ fn build_provider<E>(
     resource: Resource,
     exporter: E,
     interval: Option<Duration>,
-    runtime_reader: Option<Arc<ManualReader>>,
 ) -> (SdkMeterProvider, Meter)
 where
     E: opentelemetry_sdk::metrics::exporter::PushMetricExporter + 'static,
@@ -580,11 +615,10 @@ where
         reader_builder = reader_builder.with_interval(interval);
     }
     let reader = reader_builder.build();
-    let mut provider_builder = SdkMeterProvider::builder().with_resource(resource);
-    if let Some(reader) = runtime_reader {
-        provider_builder = provider_builder.with_reader(SharedManualReader::new(reader));
-    }
-    let provider = provider_builder.with_reader(reader).build();
+    let provider = SdkMeterProvider::builder()
+        .with_resource(resource)
+        .with_reader(reader)
+        .build();
     let meter = provider.meter(METER_NAME);
     (provider, meter)
 }
@@ -676,3 +710,7 @@ fn build_otlp_metric_exporter(
         }
     }
 }
+
+#[cfg(test)]
+#[path = "client_tests.rs"]
+mod tests;

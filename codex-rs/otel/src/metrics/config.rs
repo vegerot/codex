@@ -20,6 +20,7 @@ const CONVERSATION_TURN_COUNT_METRIC: &str = "codex.conversation.turn.count";
 
 // Metrics intentionally not sent through Codex's built-in Statsig route.
 // Keep this as an exact-name list so custom OTLP exporters still receive them.
+// Local runtime snapshots are collected independently of this export policy.
 const STATSIG_DISABLED_METRICS: &[&str] = &[
     API_CALL_COUNT_METRIC,
     API_CALL_DURATION_METRIC,
