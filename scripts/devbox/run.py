@@ -3,12 +3,13 @@
 
 import argparse
 import os
+import json
 import subprocess
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from scripts.codex_package.nightly import initialize
+from scripts.codex_package.nightly import atomic_json, initialize
 
 THREAD = "01a0cb94-2040-7fb0-a0b9-87132ed0aecc"
 SCRIPTS = Path(__file__).resolve().parent
@@ -26,6 +27,9 @@ def main():
         return
     state = Path.home() / ".local/state/codex-rebuild"
     run_dir = initialize("devbox", SCRIPTS / "coordinator.md")
+    record = json.loads((run_dir / "run.json").read_text())
+    record["coordinator_thread"] = THREAD
+    atomic_json(run_dir / "run.json", record)
     message = (
         "Scheduled devbox Codex build request. Coordinate this run here using a subagent; "
         "this is a build trigger, not a completed-run notification.\n\n"
