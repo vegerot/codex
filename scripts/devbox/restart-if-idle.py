@@ -79,6 +79,8 @@ def restart(check_only=False, package=None):
         while not select.select([fd], [], [], 1)[0]:
             if time.monotonic() >= deadline:
                 return {"status": "deferred", "reason": "Daemon is still draining"}
+        if Path(info["managedCodexPath"]).resolve() != selected:
+            return {"status": "deferred", "reason": "Selected package changed"}
         # Start in a separate systemd cgroup so the nightly oneshot's cleanup
         # cannot kill the newly detached server. This unit has no ExecStop.
         subprocess.run(
@@ -91,7 +93,11 @@ def restart(check_only=False, package=None):
             )
         )
         new_pid = json.loads(pid_file.read_text())["pid"]
-        if not Path(f"/proc/{new_pid}/exe").samefile(selected):
+        expected = json.loads((package / "codex-package.json").read_text())["version"]
+        if (
+            not Path(f"/proc/{new_pid}/exe").samefile(selected)
+            or after["appServerVersion"] != expected
+        ):
             raise RuntimeError("Restart did not load the selected executable")
         return {
             "status": "restarted",
