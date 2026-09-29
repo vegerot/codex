@@ -1,6 +1,7 @@
 """Run build helpers from the same committed snapshot they compile."""
 
 import os
+import json
 import shutil
 import subprocess
 import sys
@@ -12,6 +13,11 @@ def _dispatch(repo, commit, run_dir, entrypoint, arguments):
     commit = subprocess.check_output(
         ["sl", "log", "--rev", commit, "--template", "{node}"], cwd=repo, text=True
     ).strip()
+    record = json.loads((run_dir / "run.json").read_text())
+    if record["source_revision"] != commit:
+        raise RuntimeError(
+            "Build revision differs from the run source; select source first"
+        )
     cache = snapshot_cache(entrypoint)
     cache.mkdir(parents=True, exist_ok=True)
     source = cache / "source"
@@ -80,6 +86,10 @@ def _dispatch(repo, commit, run_dir, entrypoint, arguments):
 
 
 def dispatch(repo, commit, run_dir, entrypoint, arguments):
+    if not (run_dir / "run.json").is_file():
+        raise RuntimeError(
+            "Initialize a nightly run and select its source before building"
+        )
     cache = snapshot_cache(entrypoint)
     cache.mkdir(parents=True, exist_ok=True)
     lock = cache / "build.lock"
@@ -91,6 +101,13 @@ def dispatch(repo, commit, run_dir, entrypoint, arguments):
         ) from None
     try:
         _dispatch(repo, commit, run_dir, entrypoint, arguments)
+    except Exception as error:
+        from scripts.codex_package.nightly import record_stage
+
+        record = json.loads((run_dir / "run.json").read_text())
+        if record["stages"]["build"]["status"] == "pending":
+            record_stage(run_dir, "build", "failed", error=str(error))
+        raise
     finally:
         lock.rmdir()
 
