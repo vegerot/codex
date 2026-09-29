@@ -127,6 +127,7 @@ class RestartFailureTests(unittest.TestCase):
     @unittest.skipIf(__import__("sys").platform == "win32", "Unix restart adapter")
     def test_notification_retry_never_restarts_completed_run(self):
         from unittest.mock import AsyncMock
+        from scripts.codex_package import rpc
         from scripts.codex_package.restart_nightly import finish
 
         with (
@@ -145,8 +146,9 @@ class RestartFailureTests(unittest.TestCase):
             result = {"status": "restarted", "version": "tested"}
             (run / "restart.json").write_text(json.dumps(result))
             with (
-                patch(
-                    "scripts.codex_package.rpc.notify",
+                patch.object(
+                    rpc,
+                    "notify",
                     new=AsyncMock(side_effect=[OSError("offline"), None, None]),
                 ) as notify,
                 patch("scripts.macos.restart_if_idle.restart") as restart,
