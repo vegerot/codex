@@ -78,7 +78,7 @@ def restart(*, package, check_only=False):
         # Start in a separate systemd cgroup so the nightly oneshot's cleanup
         # cannot kill the newly detached server. This unit has no ExecStop.
         subprocess.run(
-            ["systemctl", "--user", "restart", "codex-rebuild-daemon-start.service"],
+            ["systemctl", "--user", "restart", "codex-nightly-daemon-start.service"],
             check=True,
         )
         after = json.loads(
