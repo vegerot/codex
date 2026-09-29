@@ -92,6 +92,8 @@ def main():
             else schedule(args.run_dir.resolve())
         )
         print(json.dumps(result, indent=2))
+        if result.get("status") == "error":
+            raise SystemExit(1)
     elif args.command == "activate":
         from scripts.codex_package.activation import activate_verified
 

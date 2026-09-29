@@ -96,7 +96,10 @@ def finish(run, check=False):
                 module.restart, check_only=check, package=package, deadline=deadline
             )
         while True:
-            result = action()
+            try:
+                result = action()
+            except Exception as error:
+                result = {"status": "error", "reason": str(error)}
             atomic_json(run / "restart.json", result)
             record_stage(run, "restart", result["status"], result=result)
             if (
