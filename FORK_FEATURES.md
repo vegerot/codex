@@ -41,7 +41,9 @@ or which scheduled tasks are enabled.
 - **SCM build-service packages:** versioned Linux packages and cross-compiled
   Apple Silicon macOS packages, with exact-source verification/install helpers.
   Linux includes bubblewrap; macOS includes a matching voice host/runtime,
-  library relocation/signing, and VPN-aware backend selection. Artifact acquisition
+  library relocation/signing, and VPN-aware backend selection. SCM version stamping
+  accepts a stable release tag resolved by the authenticated submitter, so workers
+  need no GitHub credentials for release lookup. Artifact acquisition
   and verification are separate from activation. Unix
   activation selects the package for CLI and daemon and disables upstream
   automatic updates; a separate worker restarts after publication and idle checks.
