@@ -4,8 +4,11 @@
 import argparse
 import os
 import subprocess
-from datetime import datetime, timezone
+import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from scripts.codex_package.nightly import initialize
 
 THREAD = "01a0cb94-2040-7fb0-a0b9-87132ed0aecc"
 SCRIPTS = Path(__file__).resolve().parent
@@ -22,15 +25,12 @@ def main():
         subprocess.run([*command, "--check"], check=True, timeout=180)
         return
     state = Path.home() / ".local/state/codex-rebuild"
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ")
-    run_dir = state / "runs" / stamp
-    run_dir.mkdir(parents=True)
-    (run_dir / "prompt.md").write_text((SCRIPTS / "prompt.md").read_text())
+    run_dir = initialize("devbox", SCRIPTS / "coordinator.md")
     message = (
         "Scheduled devbox Codex build request. Coordinate this run here using a subagent; "
         "this is a build trigger, not a completed-run notification.\n\n"
         f"Run directory: {run_dir}\nSource repository: {SCRIPTS.parents[1]}\n\n"
-        + (SCRIPTS / "coordinator.md").read_text()
+        + (run_dir / "coordinator.md").read_text()
     )
     (run_dir / "request.md").write_text(message)
     with (run_dir / "dispatch.log").open("w") as log:
