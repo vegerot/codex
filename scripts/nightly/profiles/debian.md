@@ -1,6 +1,6 @@
 # Debian desktop
 
-Native Debian, existing 09:00 America/Los_Angeles heartbeat. Build locally from a
+Native Debian, existing 04:00 America/Los_Angeles heartbeat. Build locally from a
 committed snapshot, preserving stable Cargo cache/source paths. Keep the 15 GiB
 free-space requirement, memory-derived jobs capped at 16, clang/lld-19, 16 codegen
 units, no LTO/debug/incremental. Package CLI, Code Mode, ripgrep and source-built

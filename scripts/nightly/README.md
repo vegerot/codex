@@ -42,7 +42,7 @@ records; there is no legacy migration/parser. Reverify an existing package to
 establish the new baseline. A selected package is not proof the running server
 loaded it.
 
-Devbox keeps its existing 05:00 Pacific systemd timer. macOS keeps 06:00, Debian
-09:00 and Windows 03:00 in their existing task registries. No new recurring timers.
+Devbox keeps its 03:00 Pacific systemd timer. macOS keeps 06:00, Debian
+04:00 and Windows 05:00 in their existing task registries. No new recurring timers.
 Reload systemd after unit changes and inspect its next trigger. Validate Debian
 on native Debian, not WSL; preserve Windows junctions and activation settings.
