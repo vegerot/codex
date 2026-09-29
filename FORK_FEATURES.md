@@ -66,3 +66,4 @@ sl diff --rev upstream/main --stat --pager=never
 ```
 
 - Nightly builds share source-reconciliation instructions and four platform profiles; only explicitly missing patches are replayed.
+- Native Debian builder and shared V8/RPC helpers live alongside the other source-build tools.

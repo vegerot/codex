@@ -78,7 +78,7 @@ def verify(package, commit):
     subprocess.run(
         [
             sys.executable,
-            str(ROOT / "scripts/devbox/test-host.py"),
+            str(ROOT / "scripts/codex_package/test_host.py"),
             str(package / "bin/codex-code-mode-host"),
         ],
         check=True,

@@ -91,7 +91,7 @@ def verify(package: Path, binaries: Path, repo: Path, run: Path, version: str) -
     if actual != f"codex-cli {version}":
         raise RuntimeError(f"Unexpected CLI version: {actual}")
     for script, executable in (
-        ("scripts/devbox/test-host.py", package / "bin/codex-code-mode-host.exe"),
+        ("scripts/codex_package/test_host.py", package / "bin/codex-code-mode-host.exe"),
         ("scripts/codex_package/check_runtime_version.py", cli),
     ):
         subprocess.run(

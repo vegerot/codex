@@ -43,7 +43,7 @@ cached at startup.
   version, bwrap, V8 execution, and doctor. `--install` selects it for both CLI
   and managed daemon without restarting active tasks. Without that flag it only
   downloads/verifies; this replaces the original pilot download script.
-- `test-host.py`: exercises the actual packaged Code Mode host protocol.
+- `../codex_package/test_host.py`: exercises the actual packaged Code Mode host protocol.
 - `watch_memory.py`: optional Linux RSS/PSS/available-memory recording around a
   command. Set `BUILD_LOG_DIR` to a nonexistent directory before invoking it.
   The command must keep its children in its process group. Do not wrap the
