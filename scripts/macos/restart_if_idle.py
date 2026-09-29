@@ -40,7 +40,7 @@ def running_executable(pid):
     )
 
 
-def restart(package, check_only=False):
+def restart(package, check_only=False, deadline=None):
     from scripts.codex_package.idle_tasks import inspect_tasks
 
     cli = package / "bin/codex"
@@ -76,7 +76,7 @@ def restart(package, check_only=False):
     # SIGHUP closes admission and drains turns that raced the idle check.
     # Do not use `daemon restart`: its grace timeout can escalate to SIGKILL.
     os.kill(pid, signal.SIGHUP)
-    deadline = time.monotonic() + 1800
+    deadline = deadline if deadline is not None else time.monotonic() + 1800
     while time.monotonic() < deadline:
         try:
             if process_start(pid) != process["processStartTime"]:
