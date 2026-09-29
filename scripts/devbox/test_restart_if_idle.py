@@ -1,16 +1,11 @@
 """Exercise idle decisions without signaling the real daemon."""
 
-import importlib.util
 import sys
 import unittest
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent))
-spec = importlib.util.spec_from_file_location(
-    "idle_restart", Path(__file__).with_name("restart-if-idle.py")
-)
-idle = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(idle)
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from scripts.codex_package import idle_tasks as idle
 
 
 class IdleTests(unittest.IsolatedAsyncioTestCase):
