@@ -81,18 +81,20 @@ def finish(run, check=False):
     package = Path(record["stages"]["verify"]["package"])
     with (run / "restart.lock").open("a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        deadline = time.monotonic() + 1800
         if record["profile"] == "macos":
             from scripts.macos.restart_if_idle import restart
 
-            action = partial(restart, package, check_only=check)
+            action = partial(restart, package, check_only=check, deadline=deadline)
         else:
             spec = importlib.util.spec_from_file_location(
                 "linux_restart", ROOT / "scripts/devbox/restart-if-idle.py"
             )
             module = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(module)
-            action = partial(module.restart, check_only=check, package=package)
-        deadline = time.monotonic() + 1800
+            action = partial(
+                module.restart, check_only=check, package=package, deadline=deadline
+            )
         while True:
             result = action()
             atomic_json(run / "restart.json", result)
