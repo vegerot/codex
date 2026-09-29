@@ -29,6 +29,11 @@ def restart(*, package, check_only=False, deadline=None):
     )
     if info["status"] != "running":
         return {"status": "not-running"}
+    if info.get("backend") != "pid":
+        return {
+            "status": "deferred",
+            "reason": "Running App Server is not managed by codex app-server daemon",
+        }
     selected = Path(info["managedCodexPath"]).resolve()
     if selected != package.resolve() / "bin/codex" or cli.resolve() != selected:
         return {

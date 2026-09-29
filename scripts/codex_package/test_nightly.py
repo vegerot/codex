@@ -161,3 +161,60 @@ class RestartFailureTests(unittest.TestCase):
                 self.assertEqual(finish(run), updated)
                 self.assertEqual(notify.await_count, 3)
                 restart.assert_not_called()
+
+
+class OwnershipAndLaunchTests(unittest.TestCase):
+    def test_status_preserves_unmanaged_server_versions_without_pid_file(self):
+        info = {
+            "status": "running",
+            "managedCodexPath": "/selected/bin/codex",
+            "managedCodexVersion": "new",
+            "appServerVersion": "old",
+        }
+        with (
+            tempfile.TemporaryDirectory() as temporary,
+            patch(
+                "scripts.codex_package.nightly.subprocess.check_output",
+                return_value=json.dumps(info),
+            ),
+        ):
+            live = status("debian", Path(temporary))["live"]
+        self.assertEqual(live["ownership"], "unmanaged")
+        self.assertEqual(live["appServerVersion"], "old")
+        self.assertTrue(live["restart_pending"])
+        self.assertNotIn("error", live)
+
+    def test_failed_worker_launch_is_recorded(self):
+        import subprocess
+        from scripts.codex_package import restart_nightly
+
+        with (
+            tempfile.TemporaryDirectory() as temporary,
+            patch(
+                "scripts.codex_package.nightly.subprocess.check_output",
+                return_value="a" * 40,
+            ),
+        ):
+            run = initialize("debian", state=Path(temporary))
+            for stage in ("build", "verify", "activate", "publish"):
+                record_stage(run, stage, "success")
+            (run / "helpers").mkdir()
+            with (
+                patch.object(restart_nightly.sys, "platform", "linux"),
+                patch.object(
+                    restart_nightly.subprocess,
+                    "run",
+                    side_effect=subprocess.CalledProcessError(1, ["systemd-run"]),
+                ),
+            ):
+                with self.assertRaises(subprocess.CalledProcessError):
+                    restart_nightly.schedule(run)
+            self.assertEqual(
+                json.loads((run / "restart.json").read_text())["status"], "error"
+            )
+            self.assertEqual(
+                json.loads((run / "run.json").read_text())["stages"]["restart"][
+                    "status"
+                ],
+                "error",
+            )
