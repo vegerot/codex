@@ -28,7 +28,9 @@ verified package on Unix, under the daemon install lock. It never restarts.
 remain agent-directed; scripts do not guess which patches to drop or rebase.
 
 After successful publication, `restart --run-dir <run>` starts an independent
-worker from a saved copy of the scripts. It checks all tasks/queues, including the
+worker from a saved copy of the scripts. Linux dispatch returns immediately so
+the coordinating task can become idle; worker output is saved in restart.log.
+It checks all tasks/queues, including the
 nightly task, for up to 30 minutes. A busy daemon stays pending until a subsequent
 nightly/manual retry. `restart --run-dir <run> --check` inspects without signaling.
 Linux uses pidfd and the user `codex-nightly-daemon-start.service` linked from
