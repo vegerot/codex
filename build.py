@@ -498,5 +498,20 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Build Codex locally or on SCM")
     parser.add_argument("--scm", action="store_true", help="create an SCM package")
     parser.add_argument("--jobs", type=int, help="Windows Cargo jobs (default: 24)")
+    parser.add_argument("--commit", help="committed source revision")
+    parser.add_argument("--run-dir", type=Path)
     args = parser.parse_args()
-    main(args.scm, args.jobs)
+    if not args.scm and not os.environ.get("CODEX_FROZEN_SOURCE"):
+        from scripts.codex_package.source_snapshot import dispatch
+
+        if not args.commit or not args.run_dir:
+            parser.error("local builds require --commit and --run-dir")
+        dispatch(
+            REPO_ROOT,
+            args.commit,
+            args.run_dir,
+            "build.py",
+            ["--jobs", str(args.jobs)] if args.jobs else [],
+        )
+    else:
+        main(args.scm, args.jobs)
