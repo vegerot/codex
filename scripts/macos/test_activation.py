@@ -56,6 +56,20 @@ class ActivationTests(unittest.TestCase):
         original["updater"]["autoUpdateEnabled"] = False
         self.assertEqual(json.loads(self.settings.read_text()), original)
 
+    def test_cli_only_selection_preserves_official_daemon_and_updater(self):
+        marker = self.current.parent / "auto-update-version"
+        marker.write_text("official")
+        self.settings.parent.mkdir()
+        original = {"remoteControlEnabled": True, "updater": {"autoUpdateEnabled": True}}
+        self.settings.write_text(json.dumps(original))
+        previous = select_package(self.package, None, self.launchers, self.settings)
+        self.assertEqual(self.current.readlink(), Path("old-package"))
+        self.assertEqual(marker.read_text(), "official")
+        self.assertEqual(json.loads(self.settings.read_text()), original)
+        self.assertEqual(set(previous), {str(self.launchers / name) for name in
+                                      ("codex", "codex-code-mode-host")})
+        self.assertEqual((self.launchers / "codex").resolve(), self.package / "bin/codex")
+
     def test_inflight_installer_blocks_selection(self):
         with (self.current.parent / "install.lock").open("a") as lock:
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)

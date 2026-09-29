@@ -13,9 +13,10 @@ SCM's x86_64 slot describes the worker, not the package target. Reuse only artif
 matching exact SHA, target and version. Keep build-scm.sh and build-scm-macos.py.
 Use scripts/macos/install_scm.py for acquisition, voice relocation and signing.
 Verify voice manifest, signatures, CLI/host/voice source agreement and App Server.
-Restart only after validation and publication, independently of the nightly task.
-Inspect ChatGPT CODEX_CLI_PATH without changing app settings. Never control
-com.openai.codex directly; use App Mirror when UI inspection is necessary.
+Activate only the terminal CLI; do not replace the official managed daemon or
+change its updater. Nightly restart is not requested. ChatGPT uses its official
+bundled executable: keep launchctl CODEX_CLI_PATH unset, including after login.
+Never control com.openai.codex directly; use App Mirror when UI inspection is necessary.
 
 Native developer builds package CLI and Code Mode without adding the SCM voice
 toolchain. TODO: simplify native/SCM voice packaging once the toolchain is shared.
