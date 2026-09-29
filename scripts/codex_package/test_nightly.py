@@ -91,3 +91,35 @@ class BuildFailureTests(unittest.TestCase):
                 {"status": "failed", "error": "compiler launcher failed"},
             )
             self.assertFalse((root / "cache/build.lock").exists())
+
+
+class RestartFailureTests(unittest.TestCase):
+    @unittest.skipIf(__import__("sys").platform == "win32", "Unix restart adapter")
+    def test_probe_error_is_saved_without_claiming_restart(self):
+        from scripts.codex_package.restart_nightly import finish
+
+        with (
+            tempfile.TemporaryDirectory() as temporary,
+            patch(
+                "scripts.codex_package.nightly.subprocess.check_output",
+                return_value="a" * 40,
+            ),
+        ):
+            run = initialize("macos", state=Path(temporary))
+            for stage in ("build", "verify", "activate", "publish"):
+                record_stage(run, stage, "success", package=temporary)
+            with patch(
+                "scripts.macos.restart_if_idle.restart",
+                side_effect=OSError("control socket unavailable"),
+            ):
+                result = finish(run)
+            self.assertEqual(
+                result, {"status": "error", "reason": "control socket unavailable"}
+            )
+            self.assertEqual(json.loads((run / "restart.json").read_text()), result)
+            self.assertEqual(
+                json.loads((run / "run.json").read_text())["stages"]["restart"][
+                    "status"
+                ],
+                "error",
+            )
