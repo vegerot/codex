@@ -97,7 +97,9 @@ states. No extra timers, coordinator migration or stacked PR workflow in this ch
 Create the run with `python3 scripts/nightly.py init --profile <profile>` unless
 the coordinator already supplied one. Read its saved workflow.md/profile.md.
 After reconciliation, run `python3 scripts/nightly.py source --run-dir <run>
---commit <SHA>`. New repaired source means a new run linked in the report.
+--commit <SHA>`. New repaired source means a new run linked in the report. The source command
+snapshots that revision's helpers in <run>/helpers. Use those saved scripts for
+SCM download, verification, activation and restart, not the moving working copy.
 Use `record --run-dir <run> --stage build --status success --evidence <JSON>`
 only after an actual successful build; retain the build's source/target/logs in
 that JSON. Installers acquire/stage artifacts; then use `verify --profile
