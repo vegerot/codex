@@ -25,36 +25,50 @@ class BuildTests(unittest.TestCase):
             scm.assert_called_once_with()
             local.assert_not_called()
 
-    def test_macos_route(self):
-        with (
-            patch.object(build.platform, "system", return_value="Darwin"),
-            patch.object(build.platform, "machine", return_value="arm64"),
-            patch.object(build, "validate_existing_package"),
-            patch.object(build, "resolve_codex_v8_cargo_env", return_value={}),
-            patch.object(
-                build.subprocess,
-                "check_output",
-                side_effect=["a" * 40 + "\n", "codex-cli 0.0.0\n"],
-            ),
-            patch.object(build, "install_release_binaries") as install,
-            patch.object(build, "update_package_version") as update_version,
-            patch(
-                "scripts.codex_package.nightly_version.nightly_version",
-                return_value={"version": "0.156.1+dev.aaaaaaaaaaaa"},
-            ),
-            patch.object(build, "read_workspace_version", return_value="0.0.0"),
-            patch.object(build, "build_linux") as linux,
-            patch.object(build.subprocess, "run") as run,
-        ):
-            build.main()
-            command = run.call_args_list[0].args[0]
-            self.assertEqual(
-                command[command.index("--target") + 1], "aarch64-apple-darwin"
-            )
-            self.assertEqual(command.count("--bin"), 2)
-            linux.assert_not_called()
-            install.assert_called_once_with(build.TARGET_SPECS["aarch64-apple-darwin"])
-            update_version.assert_called_once_with("0.156.1+dev.aaaaaaaaaaaa")
+    def test_local_build_stages_complete_package_before_verification(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for name in ("LICENSE", "NOTICE"):
+                (root / name).write_text(name)
+            run_dir = root / "run"
+            run_dir.mkdir()
+            with (
+                patch.dict(
+                    os.environ,
+                    {
+                        "CODEX_FROZEN_SOURCE": "a" * 40,
+                        "CODEX_NIGHTLY_RUN_DIR": str(run_dir),
+                    },
+                ),
+                patch.object(build, "REPO_ROOT", root),
+                patch.object(build.Path, "home", return_value=root),
+                patch.object(
+                    build,
+                    "host_spec",
+                    return_value=build.TARGET_SPECS["x86_64-unknown-linux-gnu"],
+                ),
+                patch.object(build, "resolve_codex_v8_cargo_env", return_value={}),
+                patch.object(build, "resolve_rg_bin", return_value=root / "rg"),
+                patch.object(build, "build_linux") as compile,
+                patch.object(build, "build_package_dir") as stage,
+                patch(
+                    "scripts.codex_package.nightly_version.stamp_nightly_version",
+                    return_value={"version": "1.0.0+dev.aaaaaaaaaaaa"},
+                ),
+                patch("scripts.codex_package.nightly.record_stage"),
+                patch(
+                    "scripts.codex_package.verify_nightly.verify_run", return_value={}
+                ) as verify,
+            ):
+                build.build_local()
+                compile.assert_called_once()
+                package = stage.call_args.args[0]
+                self.assertEqual(stage.call_args.args[4].bwrap_bin.name, "bwrap")
+                self.assertEqual(
+                    json.loads((package / "build-info.json").read_text())["commit"],
+                    "a" * 40,
+                )
+                verify.assert_called_once_with(run_dir, package)
 
     def test_cargo_commands_share_release_targets(self):
         spec = build.TARGET_SPECS["x86_64-unknown-linux-gnu"]
@@ -95,52 +109,6 @@ class BuildTests(unittest.TestCase):
                     [sys.executable, "-c", "raise SystemExit(7)"], dict(os.environ)
                 )
             self.assertEqual(caught.exception.returncode, 7)
-
-    def test_linux_package_install_includes_bwrap_and_preserves_resources(self):
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            package = root / "package"
-            output = root / "output"
-            output.mkdir()
-            (package / "bin").mkdir(parents=True)
-            (package / "codex-path").mkdir()
-            (package / "codex-resources").mkdir()
-            metadata = {
-                "layoutVersion": 1,
-                "target": "x86_64-unknown-linux-gnu",
-                "variant": "codex",
-                "entrypoint": "bin/codex",
-                "resourcesDir": "codex-resources",
-                "pathDir": "codex-path",
-            }
-            (package / "codex-package.json").write_text(json.dumps(metadata))
-            rg = root / "rg"
-            rg.write_text("resource")
-            rg.chmod(0o755)
-            (package / "codex-path/rg").symlink_to(rg)
-            (output / "bwrap").write_text("newbwrap")
-            (output / "bwrap").chmod(0o755)
-            for name in ("codex", "codex-code-mode-host"):
-                for folder, contents in ((package / "bin", "old"), (output, "new")):
-                    (folder / name).write_text(contents + name)
-                    (folder / name).chmod(0o755)
-            with (
-                patch.object(build, "PACKAGE_DIR", package),
-                patch.object(build, "cargo_profile_output_dir", return_value=output),
-            ):
-                build.install_release_binaries(build.TARGET_SPECS[metadata["target"]])
-                metadata["target"] = "aarch64-apple-darwin"
-                (package / "codex-package.json").write_text(json.dumps(metadata))
-                with self.assertRaisesRegex(RuntimeError, "target"):
-                    build.validate_existing_package(
-                        build.TARGET_SPECS["x86_64-unknown-linux-gnu"]
-                    )
-            self.assertTrue((package / "codex-path/rg").is_symlink())
-            self.assertEqual(
-                (package / "codex-resources/bwrap").read_text(), "newbwrap"
-            )
-            for name in ("codex", "codex-code-mode-host"):
-                self.assertEqual((package / "bin" / name).read_text(), "new" + name)
 
 
 if __name__ == "__main__":

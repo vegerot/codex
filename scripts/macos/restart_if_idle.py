@@ -35,6 +35,15 @@ def process_start(pid):
     ).strip()
 
 
+def running_executable(pid):
+    output = subprocess.check_output(
+        ["lsof", "-a", "-p", str(pid), "-d", "txt", "-Fn"], text=True
+    )
+    return next(
+        Path(line[1:]).resolve() for line in output.splitlines() if line.startswith("n")
+    )
+
+
 def restart(package, check_only=False):
     cli = package / "bin/codex"
     info = version(cli)
@@ -53,7 +62,7 @@ def restart(package, check_only=False):
     if process_start(pid) != process["processStartTime"]:
         raise RuntimeError("Stale daemon PID record")
     expected = json.loads((package / "codex-package.json").read_text())["version"]
-    if info["appServerVersion"] == expected:
+    if info["appServerVersion"] == expected and running_executable(pid) == cli:
         return {"status": "already-current", "version": expected}
     busy = asyncio.run(inspect_tasks())
     if busy:
@@ -79,9 +88,12 @@ def restart(package, check_only=False):
         time.sleep(1)
     else:
         return {"status": "deferred", "reason": "Daemon is still draining"}
+    if Path(info["managedCodexPath"]).resolve() != cli:
+        return {"status": "deferred", "reason": "Selected package changed"}
     subprocess.run([str(cli), "app-server", "daemon", "start"], check=True)
     after = version(cli)
-    if after["appServerVersion"] != expected:
+    new_pid = json.loads(pid_file.read_text())["pid"]
+    if after["appServerVersion"] != expected or running_executable(new_pid) != cli:
         raise RuntimeError("Restart did not load the verified nightly version")
     return {"status": "restarted", "version": expected}
 

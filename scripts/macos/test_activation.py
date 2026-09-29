@@ -110,6 +110,9 @@ class ActivationTests(unittest.TestCase):
                 side_effect=[info, info | {"appServerVersion": "nightly"}],
             ),
             patch.object(idle, "process_start", side_effect=["start", "start", "gone"]),
+            patch.object(
+                idle, "running_executable", return_value=self.package / "bin/codex"
+            ),
             patch.object(idle, "inspect_tasks", new=AsyncMock(return_value=[])),
             patch.object(idle.os, "kill") as kill,
             patch.object(idle.subprocess, "run") as run,
