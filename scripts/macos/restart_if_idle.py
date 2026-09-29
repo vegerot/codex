@@ -5,9 +5,7 @@
 # ///
 """Load a selected nightly once all managed tasks are idle; never force-kill work."""
 
-import argparse
 import asyncio
-import fcntl
 import json
 import os
 from pathlib import Path
@@ -18,7 +16,6 @@ import time
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from scripts.codex_package.idle_tasks import inspect_tasks
-from scripts.macos.activate import verify_receipt
 
 
 def version(cli):
@@ -96,38 +93,3 @@ def restart(package, check_only=False):
     if after["appServerVersion"] != expected or running_executable(new_pid) != cli:
         raise RuntimeError("Restart did not load the verified nightly version")
     return {"status": "restarted", "version": expected}
-
-
-def finish(receipt_path, check_only=False):
-    package = verify_receipt(json.loads(receipt_path.read_text()))
-    with (receipt_path.parent / "restart.lock").open("a") as lock:
-        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        deadline = time.monotonic() + 1800
-        while True:
-            result = restart(package, check_only)
-            print(json.dumps(result), flush=True)
-            if check_only:
-                return result
-            (receipt_path.parent / "restart.json").write_text(
-                json.dumps(result, indent=2) + "\n"
-            )
-            if result.get("reason") != "Tasks are busy" or time.monotonic() >= deadline:
-                return result
-            time.sleep(15)
-
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--receipt", required=True, type=Path)
-    parser.add_argument("--check", action="store_true")
-    args = parser.parse_args()
-    try:
-        finish(args.receipt, args.check)
-    except Exception as error:
-        result = {"status": "error", "reason": str(error)}
-        print(json.dumps(result), flush=True)
-        if not args.check:
-            (args.receipt.parent / "restart.json").write_text(
-                json.dumps(result, indent=2) + "\n"
-            )
-        sys.exit(1)

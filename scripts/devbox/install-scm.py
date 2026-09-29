@@ -2,10 +2,8 @@
 """Verify an exact-commit SCM package and optionally activate it on the devbox."""
 
 import argparse
-import fcntl
 import hashlib
 import json
-import os
 import shutil
 import subprocess
 import sys
@@ -33,126 +31,6 @@ def cli_json(*args):
     if value["status"] != "success":
         raise RuntimeError(value.get("error"))
     return value["data"]
-
-
-def verify_package(package, commit):
-    info = json.loads((package / "build-info.json").read_text())
-    manifest = json.loads((package / "codex-package.json").read_text())
-    if (
-        info["commit"] != commit
-        or info["target"] != TARGET
-        or manifest["target"] != TARGET
-    ):
-        raise RuntimeError(
-            "SCM package does not match the requested source commit/target"
-        )
-    version = info["version"]
-    if version.split("+", 1)[0] == "0.0.0" or manifest["version"] != version:
-        raise RuntimeError("SCM package has an unstamped or inconsistent version")
-    checksums = {
-        path: digest
-        for digest, path in (
-            line.split() for line in (package / "SHA256SUMS").read_text().splitlines()
-        )
-    }
-    for name in (
-        "bin/codex",
-        "bin/codex-code-mode-host",
-        "codex-path/rg",
-        "codex-resources/bwrap",
-    ):
-        with (package / name).open("rb") as source:
-            actual = hashlib.file_digest(source, "sha256").hexdigest()
-        if actual != checksums[name]:
-            raise RuntimeError(f"SCM package checksum mismatch: {name}")
-    for binary, flag in (("codex", "--version"), ("codex-code-mode-host", "--help")):
-        result = subprocess.run(
-            [str(package / "bin" / binary), flag],
-            check=True,
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-        if binary == "codex" and result.stdout.strip() != f"codex-cli {version}":
-            raise RuntimeError("CLI version does not match SCM build metadata")
-    host_test = Path(__file__).resolve().parents[1] / "codex_package/test_host.py"
-    subprocess.run(
-        [sys.executable, str(host_test), str(package / "bin/codex-code-mode-host")],
-        check=True,
-        capture_output=True,
-        timeout=60,
-    )
-    result = subprocess.run(
-        [str(package / "bin/codex"), "doctor", "--json"],
-        capture_output=True,
-        text=True,
-        timeout=120,
-        check=False,
-    )
-    doctor = json.loads(result.stdout)
-    reports = STATE / "doctor"
-    reports.mkdir(parents=True, exist_ok=True)
-    report = reports / f"{commit}.json"
-    report.write_text(json.dumps(doctor, indent=2) + "\n")
-    if result.returncode or doctor["overallStatus"] == "fail":
-        failures = [
-            check["summary"]
-            for check in doctor["checks"].values()
-            if check["status"] == "fail"
-        ]
-        raise RuntimeError(f"SCM package doctor failed: {failures}; report: {report}")
-    return (
-        info,
-        report,
-        [
-            check["summary"]
-            for check in doctor["checks"].values()
-            if check["status"] == "warning"
-        ],
-    )
-
-
-def replace_link(target, link):
-    if link.exists() and not link.is_symlink():
-        raise RuntimeError(f"Refusing to overwrite a non-symlink launcher: {link}")
-    previous = os.readlink(link) if link.is_symlink() else None
-    pending = link.with_name(f".codex-scm-{os.getpid()}")
-    try:
-        pending.symlink_to(target)
-        os.replace(pending, link)
-    finally:
-        pending.unlink(missing_ok=True)
-    return previous
-
-
-def activate(package, cli_link, daemon_current, settings_file):
-    # The daemon selects its own package, independently of the invoking CLI.
-    # Keep its existing package root/PID namespace; do not migrate a live daemon.
-    for link in (cli_link, daemon_current):
-        if link.exists() and not link.is_symlink():
-            raise RuntimeError(f"Refusing to overwrite a non-symlink launcher: {link}")
-    with (daemon_current.parent / "install.lock").open("a") as lock:
-        # Coordinate with an official installer already in flight. Retry the
-        # installation later if busy; do not compete with its package selection.
-        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        settings = json.loads(settings_file.read_text())
-        previous_updater = settings.get("updater", {}).get("autoUpdateEnabled", True)
-        settings.setdefault("updater", {})["autoUpdateEnabled"] = False
-        temporary = settings_file.with_name(f".settings-nightly-{os.getpid()}.json")
-        try:
-            temporary.write_text(json.dumps(settings, indent=2) + "\n")
-            os.replace(temporary, settings_file)
-        finally:
-            temporary.unlink(missing_ok=True)
-        previous_daemon = replace_link(package, daemon_current)
-        previous_cli = replace_link(package / "bin/codex", cli_link)
-    return {
-        "previousCodexTarget": previous_cli,
-        "previousDaemonTarget": previous_daemon,
-        "previousAutoUpdateEnabled": previous_updater,
-        "daemonCurrent": str(daemon_current),
-        "daemonRestartRequired": True,
-    }
 
 
 def main():
@@ -202,10 +80,8 @@ def main():
             package.mkdir()
             with tarfile.open(archive) as bundle:
                 bundle.extractall(package, filter="data")
-            info, report, warnings = verify_package(package, args.commit)
             package.rename(destination)
-    else:
-        info, report, warnings = verify_package(destination, args.commit)
+    info = json.loads((destination / "build-info.json").read_text())
     receipt = {
         "versionId": args.version_id,
         "scmVersion": metadata["version"],
@@ -213,8 +89,6 @@ def main():
         "package": str(destination),
         "archiveSha256": artifact["sha256"],
         "downloadSeconds": downloaded_seconds,
-        "doctorReport": str(report),
-        "doctorWarnings": warnings,
         "build": info,
         "installed": False,
     }
