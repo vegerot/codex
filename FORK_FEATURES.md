@@ -34,16 +34,16 @@ or which scheduled tasks are enabled.
 ## Build and maintenance tooling
 
 - **Personal local builds:** [`build.py`](build.py) rebuilds matching CLI and Code
-  Mode binaries on macOS/Linux using matching V8 inputs and an existing package;
+  Mode binaries on macOS/Linux using matching V8 inputs and complete versioned packages;
   Linux includes bubblewrap and memory-aware build concurrency.
 - **SCM build-service packages:** versioned Linux packages and cross-compiled
   Apple Silicon macOS packages, with exact-source verification/install helpers.
   Linux includes bubblewrap; macOS includes a matching voice host/runtime,
-  library relocation/signing, and VPN-aware backend selection. The Mac installer
-  selects the nightly for CLI and daemon, disables upstream automatic updates,
-  and restarts after publication once all tasks become idle.
+  library relocation/signing, and VPN-aware backend selection. Artifact acquisition and verification are separate from activation. Unix
+  activation selects the package for CLI and daemon and disables upstream
+  automatic updates; a separate worker restarts after publication and idle checks.
   [Linux details](scripts/devbox/README.md) · [Mac details](scripts/macos/README.md)
-- **Devbox nightly workflow:** repository-owned 5 AM Pacific scheduling, dispatch
+- **Devbox nightly workflow:** repository-owned 3 AM Pacific scheduling, dispatch
   through an existing Codex task, verified package installation, saved run
   evidence, and daemon restart after all tasks become idle.
   [Details](scripts/devbox/README.md)

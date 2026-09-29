@@ -1,6 +1,6 @@
 # Windows
 
-Native Windows PowerShell, existing 03:00 heartbeat. Never use Bash. Use the native
+Native Windows PowerShell, existing 05:00 heartbeat. Never use Bash. Use the native
 MSVC builder in scripts/windows/build.py through root build.py, retaining its cache,
 resource monitor and 24-job limit. Build only committed source and a complete
 package including command runner, sandbox setup and sandbox service. Verify in
