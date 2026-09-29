@@ -13,13 +13,14 @@ import select
 import signal
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from scripts.codex_package.idle_tasks import inspect_tasks
 
 
-def restart(check_only=False):
+def restart(check_only=False, package=None):
     codex_home = Path(os.environ.get("CODEX_HOME", Path.home() / ".codex"))
     cli = Path.home() / ".local/bin/codex"
     info = json.loads(
@@ -30,18 +31,22 @@ def restart(check_only=False):
     if info["status"] != "running":
         return {"status": "not-running"}
     selected = Path(info["managedCodexPath"]).resolve()
-    receipt = json.loads(
-        (Path.home() / ".local/state/codex-rebuild/installed-scm.json").read_text()
-    )
-    if (
-        selected != Path(receipt["package"]).resolve() / "bin/codex"
-        or cli.resolve() != selected
-    ):
+    if package is None:
+        receipt = json.loads(
+            (Path.home() / ".local/state/codex-rebuild/installed-scm.json").read_text()
+        )
+        package = Path(receipt["package"])
+    if selected != package.resolve() / "bin/codex" or cli.resolve() != selected:
         return {
             "status": "deferred",
             "reason": "Selected package differs from verified installation receipt",
         }
-    pid_file = codex_home / "app-server-daemon/app-server.pid"
+    namespace = (
+        "app-server.pid"
+        if "standalone" in Path(info["managedCodexPath"]).parts
+        else "daemon.pid"
+    )
+    pid_file = codex_home / "app-server-daemon" / namespace
     record = pid_file.read_text()
     pid = json.loads(record)["pid"]
     # A pidfd pins the process even if the numeric PID is later reused.
@@ -70,8 +75,10 @@ def restart(check_only=False):
         # SIGHUP closes admission and drains any turn that raced the idle check.
         # Unlike `daemon restart`, this path never escalates to SIGKILL.
         signal.pidfd_send_signal(fd, signal.SIGHUP)
+        deadline = time.monotonic() + 1800
         while not select.select([fd], [], [], 1)[0]:
-            pass
+            if time.monotonic() >= deadline:
+                return {"status": "deferred", "reason": "Daemon is still draining"}
         # Start in a separate systemd cgroup so the nightly oneshot's cleanup
         # cannot kill the newly detached server. This unit has no ExecStop.
         subprocess.run(
