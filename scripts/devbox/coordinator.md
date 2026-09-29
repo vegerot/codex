@@ -16,6 +16,16 @@ retain command/build evidence there. Its subagent task retains the full tool
 transcript. It must never restart the daemon or use notify.py to send a report.
 It returns the result through normal subagent completion.
 
+The user authorizes automatic repair of routine build and orchestration bugs,
+including PATH, API compatibility, source integration, and package dependencies.
+If a worker stops on a repairable failure, delegate the diagnosed repair and
+continuation rather than treating its first failed attempt as final. Preserve
+active work and feature/verification requirements; never bypass idle checks,
+omit required package files, or weaken validation to manufacture success.
+Report blockers requiring credentials, unavailable infrastructure, a user choice,
+or repeated failures without a supported new approach. Briefly report repairs,
+failed attempts, and any remaining uncertainty.
+
 Wait for the worker to finish. Review its report and evidence, preserving failures
 and uncertainties. If it fails without a report, save an honest failure report
 yourself. If this run already has `restart.json`, report that outcome without
@@ -41,4 +51,9 @@ response, leading with sacrificed behavior or significant preservation
 uncertainty. For a newly scheduled finisher, say the idle restart check is
 scheduled, not completed. For a completed run, report its saved restart outcome.
 Ending your response allows this task to become idle. A restart-result
-notification is informational and must not trigger another build or restart.
+notification reporting success or normal busy deferral is informational; do not
+repeat successful work. An error notification authorizes diagnosing and fixing
+the finisher, then retrying the same verified package after idle. Preserve the
+failed restart.json under a distinct attempt filename before a deliberate retry;
+never discard evidence or bypass the per-run lock. Retry failed notification
+delivery without rerunning a successful restart.

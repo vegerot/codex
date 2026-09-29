@@ -59,7 +59,12 @@ def finish(run_dir):
                 "--thread",
                 THREAD,
                 "--message",
-                "Nightly idle restart result. Announce concisely; do not build or restart again. "
+                "Nightly idle restart result. Announce concisely. Success or normal busy "
+                "deferral is informational; do not repeat a successful restart. If status "
+                "is error, automatically diagnose and repair routine finisher bugs, "
+                "preserve this failed result as attempt evidence, and schedule a retry "
+                "for the same verified package using the idle checks. Do not bypass "
+                "active-task protection or rebuild solely for an orchestration error. "
                 f"Saved result: {result_path}\n\n" + json.dumps(result),
             ],
             check=True,
