@@ -1,4 +1,5 @@
 import tempfile
+import os
 import unittest
 from pathlib import Path
 
@@ -14,6 +15,31 @@ from scripts.codex_package.nightly_version import (
 
 
 class NightlyVersionTests(unittest.TestCase):
+    def test_explicit_release_tag_stamps_without_network_lookup(self):
+        with (
+            patch.dict(os.environ, {"CUSTOM_CODEX_RELEASE_TAG": "rust-v0.159.0"}),
+            patch(
+                "scripts.codex_package.nightly_version.subprocess.check_output"
+            ) as lookup,
+        ):
+            self.assertEqual(
+                nightly_version("a" * 40),
+                {
+                    "version": "0.159.0+dev.aaaaaaaaaaaa",
+                    "upstream_release_tag": "rust-v0.159.0",
+                },
+            )
+            lookup.assert_not_called()
+
+    def test_explicit_release_tag_rejects_prerelease_and_unversioned_input(self):
+        for tag in ("", "latest", "rust-v0.159.0-alpha.1"):
+            with (
+                self.subTest(tag=tag),
+                patch.dict(os.environ, {"CUSTOM_CODEX_RELEASE_TAG": tag}),
+            ):
+                with self.assertRaises(ValueError):
+                    nightly_version("a" * 40)
+
     def test_stable_tags_sort_numerically_and_ignore_alpha(self):
         refs = (
             "abc refs/tags/rust-v0.99.0\n"

@@ -10,6 +10,11 @@ build-scm.sh, existing rust.compile.lyra image. Query versions by exact commit
 before submitting; reuse matching successful builds or wait for running ones.
 Use `bytedcli --json scm repo build --repo-id 591837 --commit <SHA> --type offline
 --arch x86_64`. Poll every 30–60 seconds and save version ID and logs.
+Before submission, use authenticated GitHub access on the submitter to list
+`repos/openai/codex/git/matching-refs/tags/rust-v`, save the non-secret tag data,
+and select the highest stable `rust-vX.Y.Z` tag. Pass that tag with
+`--env '{"CUSTOM_CODEX_RELEASE_TAG":"<tag>"}'`; SCM must not need GitHub credentials
+just to stamp the package version.
 
 Keep the memory guard, 32-job cap, V8 resolver and source-built bwrap. Do not enable
 optional patched zsh. Require 8 GiB free for download/staging. Use
