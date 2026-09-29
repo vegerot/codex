@@ -68,3 +68,4 @@ sl diff --rev upstream/main --stat --pager=never
 - Nightly builds share source-reconciliation instructions and four platform profiles; only explicitly missing patches are replayed.
 - Native Debian builder and shared V8/RPC helpers live alongside the other source-build tools.
 - Nightly runs snapshot effective instructions and keep separate attempt/verified records via `scripts/nightly.py`.
+- Local root builds require an explicit committed revision and run directory and execute helpers from that source snapshot.

@@ -91,7 +91,10 @@ def verify(package: Path, binaries: Path, repo: Path, run: Path, version: str) -
     if actual != f"codex-cli {version}":
         raise RuntimeError(f"Unexpected CLI version: {actual}")
     for script, executable in (
-        ("scripts/codex_package/test_host.py", package / "bin/codex-code-mode-host.exe"),
+        (
+            "scripts/codex_package/test_host.py",
+            package / "bin/codex-code-mode-host.exe",
+        ),
         ("scripts/codex_package/check_runtime_version.py", cli),
     ):
         subprocess.run(
@@ -131,14 +134,13 @@ def build_windows(repo: Path, command: list[str], *, jobs: int) -> None:
     cache.mkdir(parents=True, exist_ok=True)
     run.mkdir(parents=True)
     packages.mkdir(parents=True, exist_ok=True)
-    commit = subprocess.check_output(
-        ["git", "rev-parse", "HEAD"], cwd=repo, text=True
-    ).strip()
+    commit = os.environ["CODEX_FROZEN_SOURCE"]
     print(
         f"Building committed HEAD {commit}; working-copy edits are not included.",
         flush=True,
     )
-    source, version = snapshot(repo, cache, commit)
+    source = repo
+    version = stamp_nightly_version(source, commit)
     spec = TARGET_SPECS["x86_64-pc-windows-msvc"]
     toolchain = tomllib.loads((source / "codex-rs/rust-toolchain.toml").read_text())[
         "toolchain"
@@ -203,7 +205,7 @@ def build_windows(repo: Path, command: list[str], *, jobs: int) -> None:
                 "-NoProfile",
                 "-NonInteractive",
                 "-File",
-                str(repo / "scripts/windows/monitor.ps1"),
+                str(source / "scripts/windows/monitor.ps1"),
                 "-CargoPid",
                 str(process.pid),
                 "-OutputPath",
