@@ -25,7 +25,13 @@ updates enabled; local desktop sessions currently use a separate app-owned serve
 
 Desktop SSH and Remote Control reach the shared managed daemon. Keep its official
 package and upstream updater independent of `~/.local/bin/codex`, which remains
-self-built. Do not add a second Codex home or change history/authentication paths.
+self-built. In the shared `.zshenv`, devbox login shells with
+`CODEX_REMOTE_PAYLOAD` export
+`CODEX_INSTALL_DIR=$HOME/.codex/packages/app-server-daemon/current/bin`. The desktop
+SSH launcher prepends that directory to PATH for its bootstrap and proxy commands;
+ordinary terminal shells keep the personal CLI. Personal Debian does not match
+this host condition. Do not add a second Codex home or change history/authentication
+paths.
 Use `codex app-server daemon version` and the PID's `/proc/<pid>/exe` to verify
 both selected and running binaries. Once installed in the dedicated daemon
 namespace, `codex app-server daemon update` follows production updates; run it
