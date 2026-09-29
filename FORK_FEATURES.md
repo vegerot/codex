@@ -3,9 +3,9 @@
 Brief inventory of the current fork’s behavior changes and build tooling. Related
 fixes are grouped together rather than listed once per commit.
 
-Runtime inventory reviewed 2026-09-28 against locally recorded `upstream/main`
-(`1b1835f751eb`); build workflows updated through the shared-nightly refactor
-(`616ab14cd417`). This describes source changes, not which version is installed
+Runtime inventory reviewed 2026-09-29 against `upstream/main`
+(`c248f6d48b97`); build workflows include the shared-nightly refactor and detached
+Linux finisher. This describes source changes, not which version is installed
 or which scheduled tasks are enabled.
 
 ## Runtime changes
@@ -28,9 +28,9 @@ or which scheduled tasks are enabled.
   initialization use the package version. Metrics strip `+build` metadata from
   version tags so development versions do not invalidate telemetry.
   [Details](scripts/devbox/README.md) · [Metric tags](codex-rs/otel/src/metrics/tags.rs)
-- **Quiet Windows helpers:** pipe-based subprocesses and the Code Mode host do
-  not open console windows under a detached daemon; interactive terminals keep
-  their separate terminal path. [Source](codex-rs/utils/pty/src/child_command.rs)
+- **Quiet Windows Code Mode host:** the Code Mode host does not open a console
+  window under a detached daemon. General pipe-based helper suppression is now
+  provided upstream. [Source](codex-rs/code-mode/src/remote_session/connection.rs)
 
 ## Build and maintenance tooling
 
