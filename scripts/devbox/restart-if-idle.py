@@ -5,7 +5,6 @@
 # ///
 """After the build task exits, load a verified nightly only if the daemon is idle."""
 
-import argparse
 import asyncio
 import json
 import os
@@ -20,7 +19,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from scripts.codex_package.idle_tasks import inspect_tasks
 
 
-def restart(check_only=False, package=None):
+def restart(*, package, check_only=False):
     codex_home = Path(os.environ.get("CODEX_HOME", Path.home() / ".codex"))
     cli = Path.home() / ".local/bin/codex"
     info = json.loads(
@@ -31,11 +30,6 @@ def restart(check_only=False, package=None):
     if info["status"] != "running":
         return {"status": "not-running"}
     selected = Path(info["managedCodexPath"]).resolve()
-    if package is None:
-        receipt = json.loads(
-            (Path.home() / ".local/state/codex-rebuild/installed-scm.json").read_text()
-        )
-        package = Path(receipt["package"])
     if selected != package.resolve() / "bin/codex" or cli.resolve() != selected:
         return {
             "status": "deferred",
@@ -106,18 +100,3 @@ def restart(check_only=False, package=None):
         }
     finally:
         os.close(fd)
-
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "--check", action="store_true", help="Inspect only; never signal or restart"
-    )
-    args = parser.parse_args()
-    try:
-        result = restart(args.check)
-    except Exception as error:  # noqa: BLE001 - report failures at the CLI boundary
-        # A failed inspection never grants permission to restart. Still let the
-        # runner announce its build report with this failure attached.
-        result = {"status": "error", "reason": str(error)}
-    print(json.dumps(result))

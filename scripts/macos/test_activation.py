@@ -10,7 +10,7 @@ import unittest
 from unittest.mock import patch, AsyncMock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from scripts.macos.activate import select_package
+from scripts.codex_package.activation import select_package
 from scripts.macos import restart_if_idle as idle
 
 
