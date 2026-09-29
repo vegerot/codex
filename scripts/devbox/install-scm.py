@@ -75,7 +75,7 @@ def verify_package(package, commit):
         )
         if binary == "codex" and result.stdout.strip() != f"codex-cli {version}":
             raise RuntimeError("CLI version does not match SCM build metadata")
-    host_test = Path(__file__).resolve().with_name("test-host.py")
+    host_test = Path(__file__).resolve().parents[1] / "codex_package/test_host.py"
     subprocess.run(
         [sys.executable, str(host_test), str(package / "bin/codex-code-mode-host")],
         check=True,
