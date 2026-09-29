@@ -31,7 +31,8 @@ After successful publication, `restart --run-dir <run>` starts an independent
 worker from a saved copy of the scripts. It checks all tasks/queues, including the
 nightly task, for up to 30 minutes. A busy daemon stays pending until a subsequent
 nightly/manual retry. `restart --run-dir <run> --check` inspects without signaling.
-Linux uses pidfd and a separate systemd daemon-start service; Mac verifies PID
+Linux uses pidfd and the user `codex-nightly-daemon-start.service` linked from
+this directory (install it on Debian and Devbox); Mac verifies PID
 identity and sends graceful SIGHUP. Neither force-kills work. Windows is build-only.
 
 `status --profile <profile> [--json]` is host-local: latest attempt, latest verified

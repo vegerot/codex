@@ -15,7 +15,6 @@ import sys
 import time
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from scripts.codex_package.idle_tasks import inspect_tasks
 
 
 def version(cli):
@@ -42,6 +41,8 @@ def running_executable(pid):
 
 
 def restart(package, check_only=False):
+    from scripts.codex_package.idle_tasks import inspect_tasks
+
     cli = package / "bin/codex"
     info = version(cli)
     if Path(info["managedCodexPath"]).resolve() != cli:
