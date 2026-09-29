@@ -120,6 +120,10 @@ def verify(package, commit, target, run):
 
 def verify_run(run, package):
     record = json.loads((run / "run.json").read_text())
+    if record["stages"]["verify"]["status"] == "success":
+        raise RuntimeError(
+            "This run already verified a package; use a new run for another verification"
+        )
     try:
         commit = record["source_revision"]
         if not commit:
