@@ -2,6 +2,7 @@
 
 from functools import partial
 import importlib.util
+import asyncio
 import json
 import shutil
 import subprocess
@@ -81,6 +82,13 @@ def finish(run, check=False):
     package = Path(record["stages"]["verify"]["package"])
     with (run / "restart.lock").open("a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        saved = run / "restart.json"
+        if not check and saved.exists():
+            previous = json.loads(saved.read_text())
+            if previous["status"] in ("restarted", "already-current", "not-running"):
+                report_result(run, record, previous)
+                return previous
+            shutil.copy2(saved, run / f"restart-attempt-{time.time_ns()}.json")
         deadline = time.monotonic() + 1800
         if record["profile"] == "macos":
             from scripts.macos.restart_if_idle import restart
@@ -100,12 +108,34 @@ def finish(run, check=False):
                 result = action()
             except Exception as error:
                 result = {"status": "error", "reason": str(error)}
+            if check:
+                return result
             atomic_json(run / "restart.json", result)
             record_stage(run, "restart", result["status"], result=result)
-            if (
-                check
-                or result.get("reason") != "Tasks are busy"
-                or time.monotonic() >= deadline
-            ):
+            if result.get("reason") != "Tasks are busy" or time.monotonic() >= deadline:
+                report_result(run, record, result)
                 return result
             time.sleep(15)
+
+
+def report_result(run, record, result):
+    thread = record.get("coordinator_thread")
+    if not thread:
+        return
+    receipt = run / "notification.json"
+    if receipt.exists() and json.loads(receipt.read_text())["status"] == "sent":
+        return
+    from scripts.codex_package.rpc import notify
+
+    try:
+        asyncio.run(
+            notify(
+                thread,
+                "Nightly idle restart result. Saved evidence: "
+                f"{run / 'restart.json'}\n" + json.dumps(result),
+            )
+        )
+    except Exception as error:
+        atomic_json(receipt, {"status": "error", "reason": str(error)})
+        raise
+    atomic_json(receipt, {"status": "sent"})
