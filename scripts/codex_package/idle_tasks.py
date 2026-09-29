@@ -1,6 +1,6 @@
 """Shared idle checks for nightly daemon restarts on Linux and macOS."""
 
-from scripts.devbox.notify import connect, request
+from scripts.codex_package.rpc import connect, request
 
 
 async def busy_threads(rpc):
