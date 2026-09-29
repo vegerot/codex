@@ -16,7 +16,7 @@ from urllib.request import Request, urlopen
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 import build  # noqa: E402
-from scripts.macos.activate import activate  # noqa: E402
+from scripts.codex_package.verify_nightly import verify_run  # noqa: E402
 
 PACKAGES = Path.home() / ".local/share/codex-macos-build/packages"
 
@@ -136,7 +136,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--version-id", required=True)
     parser.add_argument("--commit", required=True)
-    parser.add_argument("--install", action="store_true")
+    parser.add_argument("--run-dir", type=Path, required=True)
     args = parser.parse_args()
     if platform.system() != "Darwin" or platform.machine() != "arm64":
         parser.error("This installer is for Apple Silicon macOS")
@@ -170,23 +170,24 @@ def main():
             name: sha256(package / "bin" / name)
             for name in ("codex", "codex-code-mode-host")
         }
-        destination = install(package, info) if args.install else package
+        destination = install(package, info)
         receipt = {
             "backend": "scm",
             "version_id": args.version_id,
             "scm_version": metadata["version"],
             "build": info,
             "binary_hashes": hashes,
-            "package": str(destination) if args.install else None,
-            "installed": args.install,
+            "package": str(destination),
+            "installed": True,
         }
         state = Path.home() / ".local/state/codex-macos-build"
         state.mkdir(parents=True, exist_ok=True)
         receipt_path = state / f"scm-{args.version_id}.json"
         receipt_path.write_text(json.dumps(receipt, indent=2) + "\n")
-        if args.install:
-            receipt["activation"] = activate(receipt_path)
-            receipt_path.write_text(json.dumps(receipt, indent=2) + "\n")
+        verify_run(args.run_dir, destination)
+        (args.run_dir / "artifact.json").write_text(
+            json.dumps(receipt, indent=2) + "\n"
+        )
         print(json.dumps(receipt, indent=2))
 
 

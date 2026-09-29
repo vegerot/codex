@@ -79,4 +79,17 @@ def status(profile, state=None):
             if pointer.exists()
             else None
         )
+    if profile == "windows":
+        result["live"] = {"activation": "not_requested"}
+    else:
+        cli = Path.home() / ".local/bin/codex"
+        try:
+            info = json.loads(
+                subprocess.check_output(
+                    [str(cli), "app-server", "daemon", "version"], text=True, timeout=30
+                )
+            )
+            result["live"] = {"cli": str(cli.resolve()), **info}
+        except (OSError, subprocess.SubprocessError, ValueError) as error:
+            result["live"] = {"error": str(error)}
     return result

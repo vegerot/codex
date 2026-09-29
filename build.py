@@ -137,7 +137,8 @@ def cargo_command(spec: TargetSpec, toolchain: str | None = None) -> list[str]:
 
 def build_local() -> None:
     from scripts.codex_package.nightly_version import stamp_nightly_version
-    from scripts.codex_package.verify_nightly import verify
+    from scripts.codex_package.verify_nightly import verify_run
+    from scripts.codex_package.nightly import record_stage
 
     spec = host_spec()
     commit = os.environ["CODEX_FROZEN_SOURCE"]
@@ -189,7 +190,8 @@ def build_local() -> None:
         shutil.copy2(REPO_ROOT / name, package / name)
     info["stage_seconds"] = round(time.monotonic() - stage_started, 2)
     (package / "build-info.json").write_text(json.dumps(info, indent=2) + "\n")
-    print(json.dumps(verify(package, commit, spec.target, run), indent=2))
+    record_stage(run, "build", "success", evidence=info)
+    print(json.dumps(verify_run(run, package), indent=2))
 
 
 def scm_memory_status() -> tuple[int, int]:

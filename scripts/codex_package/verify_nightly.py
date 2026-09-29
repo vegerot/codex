@@ -2,9 +2,12 @@
 
 import hashlib
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
+
+os.environ.setdefault("CODEX_REPO_ROOT", str(Path(__file__).resolve().parents[2]))
 
 from scripts.codex_package.layout import validate_package_dir
 from scripts.codex_package.targets import PACKAGE_VARIANTS, TARGET_SPECS
