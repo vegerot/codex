@@ -14,6 +14,23 @@ spec.loader.exec_module(idle)
 
 
 class IdleTests(unittest.IsolatedAsyncioTestCase):
+    async def test_ephemeral_tasks_still_block_when_active_without_queue_query(self):
+        async def rpc(method, params):
+            if method == "thread/loaded/list":
+                return {"data": ["idle", "active"], "nextCursor": None}
+            if method == "thread/read":
+                return {
+                    "thread": {
+                        "ephemeral": True,
+                        "status": {"type": params["threadId"]},
+                    }
+                }
+            self.fail("Ephemeral tasks must not query submission queues")
+
+        self.assertEqual(
+            await idle.busy_threads(rpc), [{"threadId": "active", "status": "active"}]
+        )
+
     async def test_all_pages_and_all_activity_sources_block(self):
         statuses = {
             "nightly": "idle",
