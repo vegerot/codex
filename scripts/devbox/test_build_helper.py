@@ -38,6 +38,7 @@ class BuildTests(unittest.TestCase):
                     {
                         "CODEX_FROZEN_SOURCE": "a" * 40,
                         "CODEX_NIGHTLY_RUN_DIR": str(run_dir),
+                        "CARGO_TARGET_DIR": str(root / "existing-target"),
                     },
                 ),
                 patch.object(build, "REPO_ROOT", root),

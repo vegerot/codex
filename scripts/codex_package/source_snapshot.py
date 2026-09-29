@@ -72,6 +72,9 @@ def _dispatch(repo, commit, run_dir, entrypoint, arguments):
                 else:
                     path.unlink()
     run_dir.mkdir(parents=True, exist_ok=True)
+    target = Path(os.environ.get("CARGO_TARGET_DIR", repo / "codex-rs/target"))
+    if not target.is_absolute():
+        target = (repo / "codex-rs" / target).resolve()
     subprocess.run(
         [sys.executable, str(source / entrypoint), *arguments],
         cwd=source,
@@ -80,6 +83,7 @@ def _dispatch(repo, commit, run_dir, entrypoint, arguments):
             "CODEX_FROZEN_SOURCE": commit,
             "CODEX_NIGHTLY_RUN_DIR": str(run_dir.resolve()),
             "CODEX_REPO_ROOT": str(source),
+            "CARGO_TARGET_DIR": str(target),
         },
         check=True,
     )
