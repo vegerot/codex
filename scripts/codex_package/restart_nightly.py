@@ -62,9 +62,12 @@ def schedule(run):
                     [
                         "systemd-run",
                         "--user",
+                        "--no-block",
                         f"--unit={unit}",
                         "--collect",
                         "--property=Type=oneshot",
+                        f"--property=StandardOutput=append:{run / 'restart.log'}",
+                        f"--property=StandardError=append:{run / 'restart.log'}",
                         *command,
                     ],
                     check=True,
