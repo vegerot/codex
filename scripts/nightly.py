@@ -19,9 +19,20 @@ def main():
     show = commands.add_parser("status")
     show.add_argument("--profile", choices=PROFILES, required=True)
     show.add_argument("--json", action="store_true")
+    verify = commands.add_parser("verify")
+    verify.add_argument("--profile", choices=PROFILES, required=True)
+    verify.add_argument("--run-dir", type=Path, required=True)
+    verify.add_argument("--package", type=Path, required=True)
     args = parser.parse_args()
     if args.command == "init":
         print(initialize(args.profile, args.coordinator))
+    elif args.command == "verify":
+        from scripts.codex_package.verify_nightly import verify_run
+
+        record = json.loads((args.run_dir / "run.json").read_text())
+        if record["profile"] != args.profile:
+            parser.error("profile differs from run")
+        print(json.dumps(verify_run(args.run_dir, args.package), indent=2))
     else:
         result = status(args.profile)
         if args.json:

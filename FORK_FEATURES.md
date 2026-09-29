@@ -69,3 +69,4 @@ sl diff --rev upstream/main --stat --pager=never
 - Native Debian builder and shared V8/RPC helpers live alongside the other source-build tools.
 - Nightly runs snapshot effective instructions and keep separate attempt/verified records via `scripts/nightly.py`.
 - Local root builds require an explicit committed revision and run directory and execute helpers from that source snapshot.
+- Shared package verification records source/target/version, real V8 and App Server probes, platform resources, doctor, and final hashes.
