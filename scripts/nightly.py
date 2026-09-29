@@ -26,9 +26,22 @@ def main():
     activate = commands.add_parser("activate")
     activate.add_argument("--profile", choices=PROFILES, required=True)
     activate.add_argument("--run-dir", type=Path, required=True)
+    restart = commands.add_parser("restart")
+    restart.add_argument("--run-dir", type=Path, required=True)
+    restart.add_argument("--worker", action="store_true")
+    restart.add_argument("--check", action="store_true")
     args = parser.parse_args()
     if args.command == "init":
         print(initialize(args.profile, args.coordinator))
+    elif args.command == "restart":
+        from scripts.codex_package.restart_nightly import finish, schedule
+
+        result = (
+            finish(args.run_dir.resolve(), args.check)
+            if args.worker or args.check
+            else schedule(args.run_dir.resolve())
+        )
+        print(json.dumps(result, indent=2))
     elif args.command == "activate":
         from scripts.codex_package.activation import activate_verified
 
