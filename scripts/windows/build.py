@@ -92,7 +92,9 @@ def build_windows(repo: Path, command: list[str], *, jobs: int) -> None:
         "LIBSQLITE3_FLAGS": "SQLITE_DISABLE_INTRINSIC",
         "STABLE_GIT_COMMIT": commit,
     }
-    command = [command[0], f"+{toolchain}", *command[1:]]
+    # Rustup proxy symlinks can be rejected as untrusted Windows mount points.
+    # `run` selects the real pinned-toolchain executable without that proxy.
+    command = ["rustup", "run", toolchain, *command]
     info = {
         "commit": commit,
         **version,

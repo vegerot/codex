@@ -58,3 +58,36 @@ class RunTests(unittest.TestCase):
             self.assertEqual(record["stages"]["activate"], {"status": "not_requested"})
             with self.assertRaisesRegex(RuntimeError, "Windows"):
                 require_published(run)
+
+
+class BuildFailureTests(unittest.TestCase):
+    def test_startup_failure_is_recorded_and_releases_cache_lock(self):
+        from scripts.codex_package import source_snapshot
+
+        with (
+            tempfile.TemporaryDirectory() as temporary,
+            patch(
+                "scripts.codex_package.nightly.subprocess.check_output",
+                return_value="a" * 40,
+            ),
+        ):
+            root = Path(temporary)
+            run = initialize("windows", state=root / "state")
+            with (
+                patch.object(
+                    source_snapshot, "snapshot_cache", return_value=root / "cache"
+                ),
+                patch.object(
+                    source_snapshot,
+                    "_dispatch",
+                    side_effect=OSError("compiler launcher failed"),
+                ),
+            ):
+                with self.assertRaisesRegex(OSError, "launcher failed"):
+                    source_snapshot.dispatch(root, "a" * 40, run, "build.py", [])
+            record = json.loads((run / "run.json").read_text())
+            self.assertEqual(
+                record["stages"]["build"],
+                {"status": "failed", "error": "compiler launcher failed"},
+            )
+            self.assertFalse((root / "cache/build.lock").exists())

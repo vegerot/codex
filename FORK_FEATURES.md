@@ -40,7 +40,7 @@ changes, not which version is installed or which scheduled tasks are enabled.
   Linux includes bubblewrap; macOS includes a matching voice host/runtime,
   library relocation/signing, and VPN-aware backend selection. The Mac installer
   selects the nightly for CLI and daemon, disables upstream automatic updates,
-  and schedules a restart after all tasks become idle.
+  and restarts after publication once all tasks become idle.
   [Linux details](scripts/devbox/README.md) · [Mac details](scripts/macos/README.md)
 - **Devbox nightly workflow:** repository-owned 5 AM Pacific scheduling, dispatch
   through an existing Codex task, verified package installation, saved run
@@ -53,6 +53,12 @@ changes, not which version is installed or which scheduled tasks are enabled.
 - **Source-build instructions:** use package assembly to fetch matching V8
   artifacts and launch the packaged executable. [Guide](docs/install.md)
 
+- **Shared nightly workflow:** four platform profiles use one missing-patch replay
+  procedure, committed helper snapshots, complete packages, and separate build,
+  verification, activation, publication and restart records. Unix restarts wait
+  for idle after publication; Windows remains build-only. A host-local status
+  command reports selected and running packages. [Operations](scripts/nightly/README.md)
+
 ## Keeping this list current
 
 Update this file in the same change whenever fork behavior or build workflows
@@ -64,14 +70,3 @@ Compare the current stack and net diff with:
 sl log --rev 'only(., upstream/main)' --template '{node|short} {desc|firstline}\n' --pager=never
 sl diff --rev upstream/main --stat --pager=never
 ```
-
-- Nightly builds share source-reconciliation instructions and four platform profiles; only explicitly missing patches are replayed.
-- Native Debian builder and shared V8/RPC helpers live alongside the other source-build tools.
-- Nightly runs snapshot effective instructions and keep separate attempt/verified records via `scripts/nightly.py`.
-- Local root builds require an explicit committed revision and run directory and execute helpers from that source snapshot.
-- Shared package verification records source/target/version, real V8 and App Server probes, platform resources, doctor, and final hashes.
-- Native Mac/Linux builds stage complete immutable packages with stamped CLI versions and separate compile/staging timings, preserving installed packages.
-- Unix activation accepts verified run evidence and disables upstream updates under the install lock; macOS activation no longer schedules a premature restart. Windows remains build-only.
-- Published Unix runs can schedule a bounded idle restart from frozen helper copies; Windows does not activate or restart.
-- Platform builders/installers use shared run evidence and separate verification, activation, publication and restart; see [nightly operations](scripts/nightly/README.md).
-- Idle restart verifies the running executable as well as its version and rechecks package selection after draining.
