@@ -4,7 +4,6 @@
 import argparse
 import hashlib
 import json
-import os
 import platform
 from pathlib import Path
 import shutil
@@ -17,9 +16,9 @@ from urllib.request import Request, urlopen
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 import build  # noqa: E402
+from scripts.macos.activate import activate  # noqa: E402
 
 PACKAGES = Path.home() / ".local/share/codex-macos-build/packages"
-LAUNCHERS = Path.home() / ".local/bin"
 
 
 def cli_json(*args):
@@ -124,23 +123,12 @@ def prepare_voice(package, commit):
     manifest_path.write_text(json.dumps(manifest, indent=2) + "\n")
 
 
-def replace_link(name, target):
-    link = LAUNCHERS / name
-    temporary = LAUNCHERS / f".{name}.scm-tmp"
-    temporary.unlink(missing_ok=True)
-    temporary.symlink_to(target)
-    os.replace(temporary, link)
-
-
 def install(package, info):
     destination = PACKAGES / info["commit"]
     if destination.exists():
         raise RuntimeError(f"Package already installed: {destination}")
     PACKAGES.mkdir(parents=True, exist_ok=True)
     shutil.move(str(package), destination)
-    LAUNCHERS.mkdir(parents=True, exist_ok=True)
-    for name in ("codex", "codex-code-mode-host"):
-        replace_link(name, destination / "bin" / name)
     return destination
 
 
@@ -194,9 +182,11 @@ def main():
         }
         state = Path.home() / ".local/state/codex-macos-build"
         state.mkdir(parents=True, exist_ok=True)
-        (state / f"scm-{args.version_id}.json").write_text(
-            json.dumps(receipt, indent=2) + "\n"
-        )
+        receipt_path = state / f"scm-{args.version_id}.json"
+        receipt_path.write_text(json.dumps(receipt, indent=2) + "\n")
+        if args.install:
+            receipt["activation"] = activate(receipt_path, schedule_restart=True)
+            receipt_path.write_text(json.dumps(receipt, indent=2) + "\n")
         print(json.dumps(receipt, indent=2))
 
 

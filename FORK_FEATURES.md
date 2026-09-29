@@ -38,7 +38,9 @@ changes, not which version is installed or which scheduled tasks are enabled.
 - **SCM build-service packages:** versioned Linux packages and cross-compiled
   Apple Silicon macOS packages, with exact-source verification/install helpers.
   Linux includes bubblewrap; macOS includes a matching voice host/runtime,
-  library relocation/signing, and VPN-aware backend selection.
+  library relocation/signing, and VPN-aware backend selection. The Mac installer
+  selects the nightly for CLI and daemon, disables upstream automatic updates,
+  and schedules a restart after all tasks become idle.
   [Linux details](scripts/devbox/README.md) · [Mac details](scripts/macos/README.md)
 - **Devbox nightly workflow:** repository-owned 5 AM Pacific scheduling, dispatch
   through an existing Codex task, verified package installation, saved run
