@@ -1,21 +1,6 @@
 #!/usr/bin/env python3
 
-# Local macOS/Linux setup: the terminal and installed ChatGPT.app use
-# ~/.local/bin/codex -> codex-rs/target/codex-package-release/bin/codex.
-# CODEX_CLI_PATH names that executable for Computer Use too. This script resolves V8 build inputs
-# and builds matching release codex and codex-code-mode-host binaries. It then
-# validates the existing package and atomically replaces each binary, preserving
-# the rg/zsh resource symlinks; it does not create a package from scratch.
-# Link-time optimization is off and codegen uses 8 units to favor build speed
-# over maximum optimization. Incremental compilation is off to save disk space
-# for daily unattended builds, accepting slower rebuilds. Reusing installed
-# resources avoids duplication but lets their versions change with updates.
-# Linux builds use 6 jobs and include bwrap for daemon package validation.
-# Local builds set the package version used by Remote Control without editing Cargo files.
-# --scm builds a fresh, versioned Linux package on an SCM worker instead.
-# Windows builds and verifies a fresh package from committed HEAD, with resource
-# monitoring and 24 Cargo jobs by default. See scripts/windows/README.md.
-# Restart the app/server to load rebuilt binaries. More: ~/ai-conversations/codex/README.md
+# Committed local builds stage complete packages; SCM retains its worker entry point.
 
 import argparse
 import hashlib
@@ -32,7 +17,6 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent
 os.environ["CODEX_REPO_ROOT"] = str(REPO_ROOT)
 
-from scripts.codex_package.cargo import cargo_profile_output_dir  # noqa: E402
 from scripts.codex_package.layout import (  # noqa: E402
     build_package_dir,
     validate_package_dir,
@@ -47,7 +31,6 @@ from scripts.codex_package.targets import (  # noqa: E402
 from scripts.codex_package.v8 import resolve_codex_v8_cargo_env  # noqa: E402
 from scripts.codex_package.version import read_workspace_version  # noqa: E402
 
-PACKAGE_DIR = REPO_ROOT / "codex-rs" / "target" / "codex-package-release"
 MIN_AVAILABLE_BYTES = 1024**3
 RELEASE_ENV = {
     "CARGO_PROFILE_RELEASE_LTO": "off",
@@ -68,34 +51,6 @@ def host_spec() -> TargetSpec:
     if host not in targets:
         raise RuntimeError(f"Unsupported build host: {host}")
     return TARGET_SPECS[targets[host]]
-
-
-def validate_existing_package(spec: TargetSpec) -> None:
-    if not spec.is_linux:
-        zsh_path = PACKAGE_DIR / "codex-resources" / "zsh" / "bin" / "zsh"
-        validate_package_dir(
-            PACKAGE_DIR, PACKAGE_VARIANTS["codex"], spec, include_zsh=zsh_path.is_file()
-        )
-        return
-
-    # Validate the existing skeleton before installing newly built resources.
-    # The complete Linux package is validated after bwrap is installed.
-    metadata = json.loads((PACKAGE_DIR / "codex-package.json").read_text())
-    expected = {
-        "layoutVersion": 1,
-        "target": spec.target,
-        "variant": "codex",
-        "entrypoint": "bin/codex",
-        "resourcesDir": "codex-resources",
-        "pathDir": "codex-path",
-    }
-    for key, value in expected.items():
-        if metadata.get(key) != value:
-            raise RuntimeError(f"Invalid package metadata: {key} must be {value!r}")
-    for relative in ("bin/codex", "bin/codex-code-mode-host", "codex-path/rg"):
-        path = PACKAGE_DIR / relative
-        if not path.is_file() or not os.access(path, os.X_OK):
-            raise RuntimeError(f"Missing package executable: {path}")
 
 
 def available_memory() -> int:
@@ -149,50 +104,6 @@ def build_linux(command: list[str], env: dict[str, str]) -> None:
     raise RuntimeError("Build exceeded the memory limit even with two jobs")
 
 
-def atomic_copy(source: Path, destination: Path) -> None:
-    temporary = destination.with_name(f".{destination.name}.tmp")
-    try:
-        shutil.copy2(source, temporary)
-        os.replace(temporary, destination)
-    finally:
-        temporary.unlink(missing_ok=True)
-
-
-def install_release_binaries(spec: TargetSpec) -> None:
-    variant = PACKAGE_VARIANTS["codex"]
-    validate_existing_package(spec)
-
-    output_dir = cargo_profile_output_dir(spec, "release")
-    package_bin_dir = PACKAGE_DIR / "bin"
-    atomic_copy(
-        output_dir / variant.entrypoint_name(spec),
-        package_bin_dir / variant.entrypoint_name(spec),
-    )
-    atomic_copy(
-        output_dir / f"codex-code-mode-host{spec.exe_suffix}",
-        package_bin_dir / f"codex-code-mode-host{spec.exe_suffix}",
-    )
-
-    if spec.is_linux:
-        atomic_copy(output_dir / "bwrap", PACKAGE_DIR / "codex-resources" / "bwrap")
-        validate_package_dir(PACKAGE_DIR, variant, spec, include_zsh=False)
-    else:
-        validate_existing_package(spec)
-    print(f"Updated Codex package binaries at {PACKAGE_DIR}")
-
-
-def update_package_version(version: str) -> None:
-    metadata_path = PACKAGE_DIR / "codex-package.json"
-    metadata = json.loads(metadata_path.read_text())
-    metadata["version"] = version
-    temporary = metadata_path.with_name(f".{metadata_path.name}.tmp")
-    try:
-        temporary.write_text(json.dumps(metadata, indent=2) + "\n")
-        os.replace(temporary, metadata_path)
-    finally:
-        temporary.unlink(missing_ok=True)
-
-
 def cargo_command(spec: TargetSpec, toolchain: str | None = None) -> list[str]:
     command = ["cargo"]
     if toolchain is not None:
@@ -225,46 +136,60 @@ def cargo_command(spec: TargetSpec, toolchain: str | None = None) -> list[str]:
 
 
 def build_local() -> None:
-    from scripts.codex_package.nightly_version import nightly_version
+    from scripts.codex_package.nightly_version import stamp_nightly_version
+    from scripts.codex_package.verify_nightly import verify
 
     spec = host_spec()
-    validate_existing_package(spec)
+    commit = os.environ["CODEX_FROZEN_SOURCE"]
+    run = Path(os.environ["CODEX_NIGHTLY_RUN_DIR"])
+    version = stamp_nightly_version(REPO_ROOT, commit)
+    target = Path.home() / ".cache/codex-local-build/target"
     env = {
         **os.environ,
         **RELEASE_ENV,
+        "CARGO_TARGET_DIR": str(target),
         **resolve_codex_v8_cargo_env(spec),
     }
-    commit = subprocess.check_output(
-        ["git", "rev-parse", "HEAD"], cwd=REPO_ROOT, text=True
-    ).strip()
-    version_info = nightly_version(commit)
     command = cargo_command(spec)
+    started = time.monotonic()
     if spec.is_linux:
         build_linux(command, env)
     else:
         subprocess.run(command, cwd=REPO_ROOT / "codex-rs", env=env, check=True)
-    binary = cargo_profile_output_dir(spec, "release") / "codex"
-    cli_version = subprocess.check_output([str(binary), "--version"], text=True).strip()
-    # --version remains the Cargo crate version; Remote Control uses the package version.
-    expected = f"codex-cli {read_workspace_version()}"
-    if cli_version != expected:
-        raise RuntimeError(
-            f"Built Codex reported {cli_version!r}, expected {expected!r}"
-        )
-    install_release_binaries(spec)
-    update_package_version(version_info["version"])
-    subprocess.run(
-        [
-            sys.executable,
-            str(REPO_ROOT / "scripts/codex_package/check_runtime_version.py"),
-            str(PACKAGE_DIR / "bin/codex"),
-        ],
-        check=True,
+    info = {
+        "commit": commit,
+        "target": spec.target,
+        **version,
+        "compile_seconds": round(time.monotonic() - started, 2),
+    }
+    binaries = target / spec.target / "release"
+    package = (
+        Path.home()
+        / ".local/share/codex-local-build/packages"
+        / f"{commit}-{time.time_ns()}"
     )
-    print(
-        f"{cli_version}; Remote Control package version {version_info['version']}",
-        flush=True,
+    package.mkdir(parents=True)
+    stage_started = time.monotonic()
+    build_package_dir(
+        package,
+        version["version"],
+        PACKAGE_VARIANTS["codex"],
+        spec,
+        PackageInputs(
+            entrypoint_bin=binaries / "codex",
+            code_mode_host_bin=binaries / "codex-code-mode-host",
+            rg_bin=resolve_rg_bin(spec, None),
+            zsh_bin=None,
+            bwrap_bin=binaries / "bwrap" if spec.is_linux else None,
+            codex_command_runner_bin=None,
+            codex_windows_sandbox_setup_bin=None,
+        ),
     )
+    for name in ("LICENSE", "NOTICE"):
+        shutil.copy2(REPO_ROOT / name, package / name)
+    info["stage_seconds"] = round(time.monotonic() - stage_started, 2)
+    (package / "build-info.json").write_text(json.dumps(info, indent=2) + "\n")
+    print(json.dumps(verify(package, commit, spec.target, run), indent=2))
 
 
 def scm_memory_status() -> tuple[int, int]:
