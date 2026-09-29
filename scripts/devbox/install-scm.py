@@ -159,11 +159,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--version-id", required=True, type=int)
     parser.add_argument("--commit", required=True)
-    parser.add_argument(
-        "--install",
-        action="store_true",
-        help="Select the verified package for CLI and daemon; do not restart the daemon",
-    )
+    parser.add_argument("--run-dir", type=Path, required=True)
     args = parser.parse_args()
     if len(args.commit) != 40 or any(c not in "0123456789abcdef" for c in args.commit):
         parser.error("--commit must be the complete lowercase 40-character Git SHA")
@@ -222,38 +218,12 @@ def main():
         "build": info,
         "installed": False,
     }
-    if args.install:
-        probe = subprocess.run(
-            [str(destination / "bin/codex"), "app-server", "daemon", "version"],
-            capture_output=True,
-            text=True,
-            check=True,
-            timeout=30,
-        )
-        managed_binary = Path(json.loads(probe.stdout)["managedCodexPath"])
-        daemon_current = managed_binary.parent.parent
-        codex_home = Path(os.environ.get("CODEX_HOME", Path.home() / ".codex"))
-        allowed_roots = {
-            (codex_home / "packages" / name).resolve()
-            for name in ("standalone", "app-server-daemon")
-        }
-        if (
-            managed_binary.name != "codex"
-            or managed_binary.parent.name != "bin"
-            or daemon_current.name != "current"
-            or daemon_current.parent.resolve() not in allowed_roots
-        ):
-            raise RuntimeError(f"Unexpected managed daemon layout: {managed_binary}")
-        receipt.update(
-            activate(
-                destination,
-                Path.home() / ".local/bin/codex",
-                daemon_current,
-                codex_home / "app-server-daemon/settings.json",
-            )
-        )
-        receipt["installed"] = True
-        (STATE / "installed-scm.json").write_text(json.dumps(receipt, indent=2) + "\n")
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+    from scripts.codex_package.verify_nightly import verify_run
+    from scripts.codex_package.nightly import atomic_json
+
+    verify_run(args.run_dir, destination)
+    atomic_json(args.run_dir / "artifact.json", receipt)
     print(json.dumps(receipt, indent=2))
 
 

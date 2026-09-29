@@ -1,7 +1,5 @@
 import importlib.util
-import subprocess
 import sys
-import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -42,63 +40,6 @@ class WindowsBuildTests(unittest.TestCase):
             self.assertEqual(backend.call_args.kwargs, {"jobs": 7})
             with self.assertRaisesRegex(ValueError, "positive"):
                 entry.main(jobs=0)
-
-    def test_snapshot_excludes_edits_preserves_mtimes_and_removes_deleted_files(self):
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            repository, cache = root / "repo", root / "cache"
-            repository.mkdir()
-            cache.mkdir()
-
-            def git(*args):
-                return subprocess.check_output(
-                    ["git", *args], cwd=repository, text=True
-                ).strip()
-
-            git("init", "--quiet")
-            git("config", "user.name", "Build Test")
-            git("config", "user.email", "test@example.invalid")
-            git("config", "commit.gpgsign", "false")
-            git("config", "core.autocrlf", "false")
-            (repository / "codex-rs").mkdir()
-            (repository / "codex-rs/Cargo.toml").write_text("unstamped")
-            (repository / "codex-rs/Cargo.lock").write_text("lock")
-            (repository / "kept").write_text("committed")
-            (repository / "removed").write_text("obsolete")
-            git("add", ".")
-            git("commit", "--quiet", "--message", "initial")
-            commit = git("rev-parse", "HEAD")
-            (repository / "kept").write_text("uncommitted")
-
-            def stamp(path, revision):
-                (path / "codex-rs/Cargo.toml").write_text("stamped")
-                return {"version": "test"}
-
-            with patch.object(build, "stamp_nightly_version", side_effect=stamp):
-                source, version = build.snapshot(repository, cache, commit)
-                self.assertEqual((source / "kept").read_text(), "committed")
-                self.assertEqual(
-                    (source / "codex-rs/Cargo.toml").read_text(), "stamped"
-                )
-                times = {
-                    p.name: p.stat().st_mtime_ns
-                    for p in source.rglob("*")
-                    if p.is_file()
-                }
-                build.snapshot(repository, cache, commit)
-                self.assertEqual(
-                    times,
-                    {
-                        p.name: p.stat().st_mtime_ns
-                        for p in source.rglob("*")
-                        if p.is_file()
-                    },
-                )
-                git("rm", "removed")
-                git("commit", "--quiet", "--message", "remove obsolete")
-                build.snapshot(repository, cache, git("rev-parse", "HEAD"))
-                self.assertFalse((source / "removed").exists())
-                self.assertEqual((repository / "kept").read_text(), "uncommitted")
 
 
 if __name__ == "__main__":

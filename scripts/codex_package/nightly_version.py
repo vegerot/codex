@@ -46,8 +46,10 @@ def stamp_workspace(rust_root, base_version, commit):
             locked = locked.replace(
                 f'"{package["name"]} {old}"', f'"{package["name"]} {version}"'
             )
-    manifest_path.write_text(section)
-    lock_path.write_text(locked)
+    if section != manifest_text:
+        manifest_path.write_text(section)
+    if locked != lock_text:
+        lock_path.write_text(locked)
     return version
 
 

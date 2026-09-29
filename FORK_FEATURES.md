@@ -73,3 +73,4 @@ sl diff --rev upstream/main --stat --pager=never
 - Native Mac/Linux builds stage complete immutable packages with stamped CLI versions and separate compile/staging timings, preserving installed packages.
 - Unix activation accepts verified run evidence and disables upstream updates under the install lock; macOS activation no longer schedules a premature restart. Windows remains build-only.
 - Published Unix runs can schedule a bounded idle restart from frozen helper copies; Windows does not activate or restart.
+- Platform builders/installers use shared run evidence and separate verification, activation, publication and restart; see [nightly operations](scripts/nightly/README.md).

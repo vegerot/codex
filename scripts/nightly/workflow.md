@@ -91,3 +91,21 @@ Save report.md including source/version, target/backend, durations, jobs/memory/
 observations, artifact/package paths, verification, publication and restart states.
 Report failed attempts honestly; do not infer speedups across unlike cache/source
 states. No extra timers, coordinator migration or stacked PR workflow in this change.
+
+## Run commands
+
+Create the run with `python3 scripts/nightly.py init --profile <profile>` unless
+the coordinator already supplied one. Read its saved workflow.md/profile.md.
+After reconciliation, run `python3 scripts/nightly.py source --run-dir <run>
+--commit <SHA>`. New repaired source means a new run linked in the report.
+Use `record --run-dir <run> --stage build --status success --evidence <JSON>`
+only after an actual successful build; retain the build's source/target/logs in
+that JSON. Installers acquire/stage artifacts; then use `verify --profile
+<profile> --run-dir <run> --package <final-package>` and, on Unix,
+`activate --profile <profile> --run-dir <run>`.
+After observing the published remote ref equals the tested SHA, save that evidence
+as JSON and `record --run-dir <run> --stage publish --status success --evidence
+<JSON>`. The coordinator finally calls `restart --run-dir <run>` and ends its turn
+so it can become idle. `status --profile <profile> [--json]` reports host-local
+attempt, verification and live daemon state. Failed/skipped stages use their actual
+status; never manufacture successful evidence to bypass restart prerequisites.
