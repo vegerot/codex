@@ -17,10 +17,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent
 os.environ["CODEX_REPO_ROOT"] = str(REPO_ROOT)
 
-from scripts.codex_package.layout import (  # noqa: E402
-    build_package_dir,
-    validate_package_dir,  # noqa: F401 - used by the SCM installer
-)
+from scripts.codex_package.layout import build_package_dir  # noqa: E402
 from scripts.codex_package.ripgrep import resolve_rg_bin  # noqa: E402
 from scripts.codex_package.targets import (  # noqa: E402
     PACKAGE_VARIANTS,

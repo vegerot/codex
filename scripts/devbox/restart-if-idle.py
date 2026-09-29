@@ -19,7 +19,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from scripts.codex_package.idle_tasks import inspect_tasks
 
 
-def restart(*, package, check_only=False):
+def restart(*, package, check_only=False, deadline=None):
     codex_home = Path(os.environ.get("CODEX_HOME", Path.home() / ".codex"))
     cli = Path.home() / ".local/bin/codex"
     info = json.loads(
@@ -69,7 +69,7 @@ def restart(*, package, check_only=False):
         # SIGHUP closes admission and drains any turn that raced the idle check.
         # Unlike `daemon restart`, this path never escalates to SIGKILL.
         signal.pidfd_send_signal(fd, signal.SIGHUP)
-        deadline = time.monotonic() + 1800
+        deadline = deadline if deadline is not None else time.monotonic() + 1800
         while not select.select([fd], [], [], 1)[0]:
             if time.monotonic() >= deadline:
                 return {"status": "deferred", "reason": "Daemon is still draining"}
