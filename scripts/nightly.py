@@ -23,9 +23,21 @@ def main():
     verify.add_argument("--profile", choices=PROFILES, required=True)
     verify.add_argument("--run-dir", type=Path, required=True)
     verify.add_argument("--package", type=Path, required=True)
+    activate = commands.add_parser("activate")
+    activate.add_argument("--profile", choices=PROFILES, required=True)
+    activate.add_argument("--run-dir", type=Path, required=True)
     args = parser.parse_args()
     if args.command == "init":
         print(initialize(args.profile, args.coordinator))
+    elif args.command == "activate":
+        from scripts.codex_package.activation import activate_verified
+
+        if (
+            json.loads((args.run_dir / "run.json").read_text())["profile"]
+            != args.profile
+        ):
+            parser.error("profile differs from run")
+        print(json.dumps(activate_verified(args.run_dir), indent=2))
     elif args.command == "verify":
         from scripts.codex_package.verify_nightly import verify_run
 
