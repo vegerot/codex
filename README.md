@@ -73,6 +73,8 @@ You can also use Codex with an API key, but this requires [additional setup](htt
 
 ## Docs
 
+- [**Fork changes compared with main**](./FORK_FEATURES.md)
+
 - [**Codex Documentation**](https://developers.openai.com/codex)
 - [**Contributing**](./docs/contributing.md)
 - [**Installing & building**](./docs/install.md)
