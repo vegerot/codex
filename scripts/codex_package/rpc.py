@@ -3,6 +3,7 @@
 import asyncio
 import json
 import os
+import uuid
 from pathlib import Path
 
 from websockets.asyncio.client import unix_connect
@@ -48,3 +49,32 @@ async def connect():
     except BaseException:
         await socket.close()
         raise
+
+
+async def notify(thread_id, message=None, check=False):
+    socket = await connect()
+    try:
+        if check:
+            await request(
+                socket, 2, "thread/read", {"threadId": thread_id, "includeTurns": False}
+            )
+            print(f"Coordinator task is accessible: {thread_id}")
+            return
+        await request(
+            socket, 2, "thread/resume", {"threadId": thread_id, "excludeTurns": True}
+        )
+        receipt = await request(
+            socket,
+            3,
+            "thread/queue/add",
+            {
+                "threadId": thread_id,
+                "clientUserMessageId": str(uuid.uuid4()),
+                "input": [{"type": "text", "text": message}],
+            },
+        )
+        print(
+            f"Queued announcement: {receipt['queuedSubmission']['id']} for task {thread_id}"
+        )
+    finally:
+        await socket.close()

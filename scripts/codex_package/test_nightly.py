@@ -123,3 +123,37 @@ class RestartFailureTests(unittest.TestCase):
                 ],
                 "error",
             )
+
+    @unittest.skipIf(__import__("sys").platform == "win32", "Unix restart adapter")
+    def test_notification_retry_never_restarts_completed_run(self):
+        from unittest.mock import AsyncMock
+        from scripts.codex_package.restart_nightly import finish
+
+        with (
+            tempfile.TemporaryDirectory() as temporary,
+            patch(
+                "scripts.codex_package.nightly.subprocess.check_output",
+                return_value="a" * 40,
+            ),
+        ):
+            run = initialize("macos", state=Path(temporary))
+            for stage in ("build", "verify", "activate", "publish"):
+                record_stage(run, stage, "success", package=temporary)
+            record = json.loads((run / "run.json").read_text())
+            record["coordinator_thread"] = "test-task"
+            (run / "run.json").write_text(json.dumps(record))
+            result = {"status": "restarted", "version": "tested"}
+            (run / "restart.json").write_text(json.dumps(result))
+            with (
+                patch(
+                    "scripts.codex_package.rpc.notify",
+                    new=AsyncMock(side_effect=[OSError("offline"), None]),
+                ) as notify,
+                patch("scripts.macos.restart_if_idle.restart") as restart,
+            ):
+                with self.assertRaisesRegex(OSError, "offline"):
+                    finish(run)
+                self.assertEqual(finish(run), result)
+                self.assertEqual(finish(run), result)
+                self.assertEqual(notify.await_count, 2)
+                restart.assert_not_called()
