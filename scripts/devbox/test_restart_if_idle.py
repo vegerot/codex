@@ -86,3 +86,28 @@ class IdleTests(unittest.IsolatedAsyncioTestCase):
 
         with self.assertRaisesRegex(RuntimeError, "unavailable"):
             await idle.busy_threads(rpc)
+
+
+class OwnershipTests(unittest.TestCase):
+    def test_unmanaged_server_does_not_require_a_pid_record(self):
+        import importlib.util
+        import json
+        from unittest.mock import patch
+
+        spec = importlib.util.spec_from_file_location(
+            "linux_idle", Path(__file__).with_name("restart-if-idle.py")
+        )
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        with patch.object(
+            module.subprocess,
+            "check_output",
+            return_value=json.dumps({"status": "running"}),
+        ):
+            self.assertEqual(
+                module.restart(package=Path("/unused")),
+                {
+                    "status": "deferred",
+                    "reason": "Running App Server is not managed by codex app-server daemon",
+                },
+            )

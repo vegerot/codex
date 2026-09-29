@@ -49,6 +49,11 @@ def restart(package, check_only=False, deadline=None):
         return {"status": "deferred", "reason": "Selected package changed"}
     if info["status"] != "running":
         return {"status": "not-running"}
+    if info.get("backend") != "pid":
+        return {
+            "status": "deferred",
+            "reason": "Running App Server is not managed by codex app-server daemon",
+        }
     home = Path(os.environ.get("CODEX_HOME", Path.home() / ".codex"))
     legacy = "standalone" in Path(info["managedCodexPath"]).parts
     pid_file = (

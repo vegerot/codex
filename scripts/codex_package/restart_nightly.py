@@ -34,7 +34,7 @@ def schedule(run):
         )
     command = [
         shutil.which("uv") or "uv",
-        "--system-certs",
+        "--native-tls",
         "run",
         "--with",
         "websockets==15.0.1",
@@ -45,32 +45,38 @@ def schedule(run):
         str(run),
         "--worker",
     ]
-    with (run / "restart.log").open("a") as log:
-        if sys.platform == "darwin":
-            process = subprocess.Popen(
-                command,
-                stdin=subprocess.DEVNULL,
-                stdout=log,
-                stderr=log,
-                start_new_session=True,
-            )
-            result = {"worker_pid": process.pid}
-        else:
-            unit = f"codex-nightly-finish-{run.name}"
-            subprocess.run(
-                [
-                    "systemd-run",
-                    "--user",
-                    f"--unit={unit}",
-                    "--collect",
-                    "--property=Type=oneshot",
-                    *command,
-                ],
-                check=True,
-                stdout=log,
-                stderr=log,
-            )
-            result = {"unit": unit}
+    try:
+        with (run / "restart.log").open("a") as log:
+            if sys.platform == "darwin":
+                process = subprocess.Popen(
+                    command,
+                    stdin=subprocess.DEVNULL,
+                    stdout=log,
+                    stderr=log,
+                    start_new_session=True,
+                )
+                result = {"worker_pid": process.pid}
+            else:
+                unit = f"codex-nightly-finish-{run.name}"
+                subprocess.run(
+                    [
+                        "systemd-run",
+                        "--user",
+                        f"--unit={unit}",
+                        "--collect",
+                        "--property=Type=oneshot",
+                        *command,
+                    ],
+                    check=True,
+                    stdout=log,
+                    stderr=log,
+                )
+                result = {"unit": unit}
+    except (OSError, subprocess.SubprocessError) as error:
+        result = {"status": "error", "reason": str(error)}
+        atomic_json(run / "restart.json", result)
+        record_stage(run, "restart", "error", result=result)
+        raise
     record_stage(run, "restart", "scheduled", **result)
     return result
 
