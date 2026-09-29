@@ -1,19 +1,15 @@
 """Native Windows release packages for the root build.py entry point."""
 
-import hashlib
 import json
 import os
 import shutil
 import subprocess
 import sys
-import tempfile
 import time
 import tomllib
-import zipfile
-from datetime import datetime
 from pathlib import Path
 
-from scripts.codex_package.layout import build_package_dir, validate_package_dir
+from scripts.codex_package.layout import build_package_dir
 from scripts.codex_package.nightly_version import stamp_nightly_version
 from scripts.codex_package.ripgrep import resolve_rg_bin
 from scripts.codex_package.targets import PACKAGE_VARIANTS, TARGET_SPECS, PackageInputs
@@ -43,96 +39,13 @@ ConvertTo-Json $selected -Compress
     )
 
 
-def snapshot(repo: Path, cache: Path, commit: str) -> tuple[Path, dict]:
-    """Stamp a disposable HEAD snapshot, preserving unchanged cached file times."""
-    archive = cache / "source.zip"
-    previous = set()
-    if archive.exists():
-        with zipfile.ZipFile(archive) as old:
-            previous = {
-                entry.filename for entry in old.infolist() if not entry.is_dir()
-            }
-    subprocess.run(
-        ["git", "archive", "--format=zip", f"--output={archive}", commit],
-        cwd=repo,
-        check=True,
-    )
-    source = cache / "source"
-    with zipfile.ZipFile(archive) as zipped:
-        names = {entry.filename for entry in zipped.infolist() if not entry.is_dir()}
-        # Only the manifests need a disposable copy for version stamping. Avoid
-        # extracting and deleting thousands of unchanged files on each build.
-        manifests = ("codex-rs/Cargo.toml", "codex-rs/Cargo.lock")
-        with tempfile.TemporaryDirectory(dir=cache) as directory:
-            staged = Path(directory)
-            (staged / "codex-rs").mkdir()
-            for name in manifests:
-                (staged / name).write_bytes(zipped.read(name))
-            version = stamp_nightly_version(staged, commit)
-            stamped = {name: (staged / name).read_bytes() for name in manifests}
-        for name in previous - names:
-            obsolete = (source / name).resolve()
-            assert obsolete.is_relative_to(source.resolve())
-            obsolete.unlink(missing_ok=True)
-        for name in names:
-            destination = source / name
-            data = stamped[name] if name in stamped else zipped.read(name)
-            if not destination.exists() or destination.read_bytes() != data:
-                destination.parent.mkdir(parents=True, exist_ok=True)
-                destination.write_bytes(data)
-    return source, version
-
-
-def verify(package: Path, binaries: Path, repo: Path, run: Path, version: str) -> dict:
-    spec = TARGET_SPECS["x86_64-pc-windows-msvc"]
-    validate_package_dir(package, PACKAGE_VARIANTS["codex"], spec, include_zsh=False)
-    cli = package / "bin/codex.exe"
-    actual = subprocess.check_output([str(cli), "--version"], text=True).strip()
-    if actual != f"codex-cli {version}":
-        raise RuntimeError(f"Unexpected CLI version: {actual}")
-    for script, executable in (
-        (
-            "scripts/codex_package/test_host.py",
-            package / "bin/codex-code-mode-host.exe",
-        ),
-        ("scripts/codex_package/check_runtime_version.py", cli),
-    ):
-        subprocess.run(
-            [sys.executable, str(repo / script), str(executable)],
-            check=True,
-            timeout=60,
-        )
-    features = subprocess.check_output([str(cli), "features", "list"], text=True)
-    (run / "features.txt").write_text(features, encoding="utf-8")
-    doctor = subprocess.run(
-        [str(cli), "doctor", "--json"], capture_output=True, text=True, timeout=120
-    )
-    (run / "doctor.json").write_text(doctor.stdout, encoding="utf-8")
-    (run / "doctor.stderr.txt").write_text(doctor.stderr, encoding="utf-8")
-    report = json.loads(doctor.stdout)
-    if doctor.returncode or report["overallStatus"] == "fail":
-        raise RuntimeError(f"Doctor failed; see {run / 'doctor.json'}")
-    hashes = {}
-    for path in package.rglob("*.exe"):
-        with path.open("rb") as file:
-            hashes[path.relative_to(package).as_posix()] = hashlib.file_digest(
-                file, "sha256"
-            ).hexdigest()
-        if path.name != "rg.exe":
-            with (binaries / path.name).open("rb") as file:
-                expected = hashlib.file_digest(file, "sha256").hexdigest()
-            if hashes[path.relative_to(package).as_posix()] != expected:
-                raise RuntimeError(f"Packaged binary differs from build output: {path}")
-    return {"hashes": hashes, "doctor_status": report["overallStatus"]}
-
-
 def build_windows(repo: Path, command: list[str], *, jobs: int) -> None:
     cache = Path.home() / ".cache/codex-windows-build"
     state = Path.home() / ".local/state/codex-windows-build"
-    run = state / "runs" / datetime.now().strftime("%Y%m%d-%H%M%S-%f")
+    run = Path(os.environ["CODEX_NIGHTLY_RUN_DIR"])
     packages = Path.home() / ".local/share/codex-windows-build/packages"
     cache.mkdir(parents=True, exist_ok=True)
-    run.mkdir(parents=True)
+    run.mkdir(parents=True, exist_ok=True)
     packages.mkdir(parents=True, exist_ok=True)
     commit = os.environ["CODEX_FROZEN_SOURCE"]
     print(
@@ -250,7 +163,12 @@ def build_windows(repo: Path, command: list[str], *, jobs: int) -> None:
     )
     for name in ("LICENSE", "NOTICE"):
         shutil.copy2(source / name, package / name)
-    info.update(verify(package, binaries, repo, run, version["version"]))
+    from scripts.codex_package.verify_nightly import verify_run
+    from scripts.codex_package.nightly import record_stage
+
+    (package / "build-info.json").write_text(json.dumps(info, indent=2))
+    record_stage(run, "build", "success", evidence=info)
+    info.update(verify_run(run, package))
     info["package"] = str(destination)
     (run / "verified.json").write_text(json.dumps(info, indent=2))
     (state / "verified.json").write_text(json.dumps(info, indent=2))

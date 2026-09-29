@@ -48,5 +48,3 @@ async def connect():
     except BaseException:
         await socket.close()
         raise
-
-

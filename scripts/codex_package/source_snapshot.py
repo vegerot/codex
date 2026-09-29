@@ -8,7 +8,7 @@ import tempfile
 from pathlib import Path
 
 
-def dispatch(repo, commit, run_dir, entrypoint, arguments):
+def _dispatch(repo, commit, run_dir, entrypoint, arguments):
     commit = subprocess.check_output(
         ["sl", "log", "--rev", commit, "--template", "{node}"], cwd=repo, text=True
     ).strip()
@@ -34,6 +34,18 @@ def dispatch(repo, commit, run_dir, entrypoint, arguments):
                 str(staged),
             ],
             cwd=repo,
+            check=True,
+        )
+        subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                "import sys; from pathlib import Path; "
+                "from scripts.codex_package.nightly_version import stamp_nightly_version; "
+                "stamp_nightly_version(Path.cwd(), sys.argv[1])",
+                commit,
+            ],
+            cwd=staged,
             check=True,
         )
         for path in staged.rglob("*"):
@@ -65,3 +77,19 @@ def dispatch(repo, commit, run_dir, entrypoint, arguments):
         },
         check=True,
     )
+
+
+def dispatch(repo, commit, run_dir, entrypoint, arguments):
+    cache = Path.home() / ".cache/codex-nightly-source"
+    cache.mkdir(parents=True, exist_ok=True)
+    lock = cache / "build.lock"
+    try:
+        lock.mkdir()
+    except FileExistsError:
+        raise RuntimeError(
+            f"Another build owns {lock}; inspect its process before removing a stale lock"
+        ) from None
+    try:
+        _dispatch(repo, commit, run_dir, entrypoint, arguments)
+    finally:
+        lock.rmdir()

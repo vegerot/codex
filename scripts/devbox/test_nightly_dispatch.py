@@ -29,6 +29,7 @@ class DispatchTests(unittest.TestCase):
             patch.object(runner.Path, "home", return_value=Path(temp)),
             patch("sys.argv", ["run.py"]),
             patch.object(runner.subprocess, "run") as call,
+            patch.object(runner.subprocess, "check_output", return_value="a" * 40),
         ):
             runner.main()
             directory = (Path(temp) / ".local/state/codex-rebuild/latest").resolve()

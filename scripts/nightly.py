@@ -7,7 +7,13 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from scripts.codex_package.nightly import PROFILES, initialize, status
+from scripts.codex_package.nightly import (
+    PROFILES,
+    atomic_json,
+    initialize,
+    record_stage,
+    status,
+)
 
 
 def main():
@@ -30,9 +36,33 @@ def main():
     restart.add_argument("--run-dir", type=Path, required=True)
     restart.add_argument("--worker", action="store_true")
     restart.add_argument("--check", action="store_true")
+    source = commands.add_parser("source")
+    source.add_argument("--run-dir", type=Path, required=True)
+    source.add_argument("--commit", required=True)
+    stage = commands.add_parser("record")
+    stage.add_argument("--run-dir", type=Path, required=True)
+    stage.add_argument("--stage", choices=("build", "publish"), required=True)
+    stage.add_argument(
+        "--status", choices=("success", "failed", "skipped"), required=True
+    )
+    stage.add_argument("--evidence", type=Path, required=True)
     args = parser.parse_args()
     if args.command == "init":
         print(initialize(args.profile, args.coordinator))
+    elif args.command == "source":
+        import subprocess
+
+        revision = subprocess.check_output(
+            ["sl", "log", "--rev", args.commit, "--template", "{node}"], text=True
+        ).strip()
+        record = json.loads((args.run_dir / "run.json").read_text())
+        if record["source_revision"] and record["source_revision"] != revision:
+            parser.error("use a new run for a new source attempt")
+        record.update(source_revision=revision, helper_revision=revision)
+        atomic_json(args.run_dir / "run.json", record)
+    elif args.command == "record":
+        evidence = json.loads(args.evidence.read_text())
+        record_stage(args.run_dir, args.stage, args.status, evidence=evidence)
     elif args.command == "restart":
         from scripts.codex_package.restart_nightly import finish, schedule
 
@@ -64,6 +94,7 @@ def main():
             print(json.dumps(result, indent=2))
         else:
             print(f"Codex nightly: {args.profile}")
+            print("Live: " + json.dumps(result["live"]))
             for label in ("latest-attempt", "latest-verified"):
                 record = result[label]
                 print(f"{label}: {record['run_id'] if record else 'none recorded'}")

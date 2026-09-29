@@ -41,6 +41,7 @@ def main():
             check=True,
             timeout=180,
         )
+    state.mkdir(parents=True, exist_ok=True)
     pending = state / "latest.new"
     pending.symlink_to(run_dir)
     os.replace(pending, state / "latest")

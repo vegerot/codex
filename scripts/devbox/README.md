@@ -1,82 +1,9 @@
-# Personal devbox builds
+# devbox source builds
 
-Linux-only orchestration for the personal fork. Build entry points stay at the
-repository root: `build.py` builds locally (macOS or Linux), while `build-scm.sh`
-invokes `build.py --scm` to build and package on SCM workers. This directory owns the
-devbox scheduler and installation workflow, not another compiler implementation.
-SCM runs its configured script path through Bash and has no entry-point argument
-field, so the small shell wrapper installs the pinned Rust toolchain and selects
-the Python script's SCM mode.
-The Linux SCM mode installs `libcap-dev` on the worker when `pkg-config` cannot
-find libcap, then verifies it before compiling the required `bwrap` executable.
+Read the [shared operational guide](../nightly/README.md),
+[workflow](../nightly/workflow.md) and [devbox profile](../nightly/profiles/devbox.md).
 
-Remote Control enrollment and the App Server initialization user-agent advertise
-the version from `codex-package.json`, using the same `BuildInfo` API as the
-execution server. Local `build.py` builds keep the Cargo
-workspace version (normally `0.0.0`) and write the upstream-based development
-version into the package metadata. Thus local `codex --version` and the Remote
-Control package version can differ intentionally. Local builds do not stamp or
-restore Cargo manifests. Run the installed package's `bin/codex`, not a bare
-Cargo output, to supply the Remote Control version.
-
-SCM retains its existing disposable-checkout stamping and matching executable,
-manifest, and build-metadata checks. Those packages also advertise their manifest
-version. Restart App Server after installation; package build information is
-cached at startup.
-
-- `run.py`: snapshots `prompt.md` and queues a request into the existing task
-  through `notify.py`; it does not launch a separate `codex exec` session.
-  `coordinator.md` requires a fresh-context subagent and records its ID and report
-  under `~/.local/state/codex-rebuild/runs/`. Command evidence is retained there;
-  the worker's task contains its full transcript, replacing the old exec JSONL.
-  `python3 scripts/devbox/run.py --check` checks task access without queuing work.
-- `finish.py`: the coordinator schedules this independent systemd one-shot
-  before its final response. It waits up to 30 minutes for all tasks to be idle,
-  saves `restart.json`, and sends the restart outcome here. A run lock and saved
-  result prevent duplicate restarts. The coordinator and worker are never exempt.
-  `restart-if-idle.py` checks the selected verified package and all loaded task
-  statuses/queues. Busy, approval/input-waiting, queued, or unknown states defer
-  restart. SIGHUP drains any raced work without force-killing it; the separate
-  `codex-rebuild-daemon-start.service` starts the selected package.
-  `uv run --script scripts/devbox/restart-if-idle.py --check` only inspects.
-- `install-scm.py`: downloads an exact-commit SCM artifact and verifies hashes,
-  version, bwrap, V8 execution, and doctor. `--install` selects it for both CLI
-  and managed daemon without restarting active tasks. Without that flag it only
-  downloads/verifies; this replaces the original pilot download script.
-- `../codex_package/test_host.py`: exercises the actual packaged Code Mode host protocol.
-- `watch_memory.py`: optional Linux RSS/PSS/available-memory recording around a
-  command. Set `BUILD_LOG_DIR` to a nonexistent directory before invoking it.
-  The command must keep its children in its process group. Do not wrap the
-  ordinary build helpers, which create separate groups and already contain
-  their own memory abort guards and retry policies.
-- `test_build_helper.py` and `test_install_scm.py`: focused local tests, with
-  mocked platform routing and synthetic memory pressure rather than real builds.
-
-Run tests from the repository root:
-
-```sh
-uv run --with websockets==15.0.1 python -B -m unittest discover --start-directory scripts/devbox --pattern 'test_*.py'
-```
-
-The installed `~/.local/share/codex-rebuild` symlink points to this directory.
-The systemd user service and timer symlink to the corresponding files here;
-`codex-rebuild-daemon-start.service` must also be linked into the user unit directory.
-the enabled timer symlink points to `~/.config/systemd/user/codex-rebuild.timer`.
-After changing units, run `systemctl --user daemon-reload`. The timer remains
-daily at 05:00 America/Los_Angeles, including daylight-saving transitions.
-
-The notifier uses `uv run --script` with a pinned WebSocket dependency and sends
-requests/results to task `01a0cb94-2040-7fb0-a0b9-87132ed0aecc`. Change `THREAD`
-in `run.py` and `finish.py` together to choose another coordinator. Preserve the existing
-App Server and login environment; installing a package does not restart it.
-Each run reads its prompt once; changing the saved prompt does not steer an
-already-running task.
-
-Operational code lives here. Historical measurements and phone diagnostics
-remain in the `~/ai-conversations` repository under `codex/source-builds/`.
-
-Routine build, dependency, packaging, and orchestration bugs are repaired
-automatically with evidence and validation. A scoped source repair gets a new
-frozen SCM attempt; uncertain submissions are reconciled before resubmission.
-Finisher errors request repair and an idle retry while retaining failure records.
-Successful work is not repeated, and active-task protection remains mandatory.
+The existing user systemd timer points to `run.py`; it snapshots the workflow,
+profile and coordinator instructions, then queues the existing task. Keep the
+service/timer and daemon-start service linked from this directory. After changing
+units run `systemctl --user daemon-reload` and inspect `systemctl --user list-timers`.
