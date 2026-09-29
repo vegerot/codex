@@ -141,7 +141,7 @@ def build_local() -> None:
     commit = os.environ["CODEX_FROZEN_SOURCE"]
     run = Path(os.environ["CODEX_NIGHTLY_RUN_DIR"])
     version = stamp_nightly_version(REPO_ROOT, commit)
-    target = Path.home() / ".cache/codex-local-build/target"
+    target = Path(os.environ["CARGO_TARGET_DIR"])
     env = {
         **os.environ,
         **RELEASE_ENV,
