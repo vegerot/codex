@@ -185,7 +185,7 @@ def main():
         receipt_path = state / f"scm-{args.version_id}.json"
         receipt_path.write_text(json.dumps(receipt, indent=2) + "\n")
         if args.install:
-            receipt["activation"] = activate(receipt_path, schedule_restart=True)
+            receipt["activation"] = activate(receipt_path)
             receipt_path.write_text(json.dumps(receipt, indent=2) + "\n")
         print(json.dumps(receipt, indent=2))
 
