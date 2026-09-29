@@ -58,6 +58,26 @@ def main():
         record = json.loads((args.run_dir / "run.json").read_text())
         if record["source_revision"] and record["source_revision"] != revision:
             parser.error("use a new run for a new source attempt")
+        helpers = args.run_dir.resolve() / "helpers"
+        if not helpers.exists():
+            subprocess.run(
+                [
+                    "sl",
+                    "--config",
+                    "ui.archivemeta=false",
+                    "archive",
+                    "--type",
+                    "files",
+                    "--rev",
+                    revision,
+                    "--include",
+                    "glob:scripts/**",
+                    "--include",
+                    "path:build.py",
+                    str(helpers),
+                ],
+                check=True,
+            )
         record.update(source_revision=revision, helper_revision=revision)
         atomic_json(args.run_dir / "run.json", record)
     elif args.command == "record":
