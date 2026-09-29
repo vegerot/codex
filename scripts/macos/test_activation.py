@@ -80,9 +80,8 @@ class ActivationTests(unittest.TestCase):
             patch.dict("os.environ", {"CODEX_HOME": str(self.home)}),
             patch.object(idle, "version", return_value=info),
             patch.object(idle, "process_start", return_value="start"),
-            patch.object(
-                idle,
-                "inspect_tasks",
+            patch(
+                "scripts.codex_package.idle_tasks.inspect_tasks",
                 new=AsyncMock(return_value=[{"status": "active"}]),
             ),
             patch.object(idle.os, "kill") as kill,
@@ -113,7 +112,10 @@ class ActivationTests(unittest.TestCase):
             patch.object(
                 idle, "running_executable", return_value=self.package / "bin/codex"
             ),
-            patch.object(idle, "inspect_tasks", new=AsyncMock(return_value=[])),
+            patch(
+                "scripts.codex_package.idle_tasks.inspect_tasks",
+                new=AsyncMock(return_value=[]),
+            ),
             patch.object(idle.os, "kill") as kill,
             patch.object(idle.subprocess, "run") as run,
         ):

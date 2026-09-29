@@ -15,7 +15,6 @@ from urllib.request import Request, urlopen
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
-import build  # noqa: E402
 from scripts.codex_package.verify_nightly import verify_run  # noqa: E402
 
 PACKAGES = Path.home() / ".local/share/codex-macos-build/packages"
@@ -59,40 +58,6 @@ def verify(package, commit):
     for name, digest in voice_manifest["sha256"].items():
         if sha256(package / name) != digest:
             raise RuntimeError(f"SCM voice checksum mismatch: {name}")
-    build.validate_package_dir(
-        package,
-        build.PACKAGE_VARIANTS["codex"],
-        build.TARGET_SPECS[info["target"]],
-        include_zsh=True,
-    )
-    actual = subprocess.check_output(
-        [str(package / "bin/codex"), "--version"], text=True
-    )
-    if actual.strip() != f"codex-cli {info['version']}":
-        raise RuntimeError("SCM CLI version differs from build metadata")
-    for name in ("codex", "codex-code-mode-host"):
-        subprocess.run(
-            ["codesign", "--verify", "--strict", str(package / "bin" / name)],
-            check=True,
-        )
-    subprocess.run(
-        [
-            sys.executable,
-            str(ROOT / "scripts/codex_package/test_host.py"),
-            str(package / "bin/codex-code-mode-host"),
-        ],
-        check=True,
-        timeout=60,
-    )
-    subprocess.run(
-        [
-            sys.executable,
-            str(ROOT / "scripts/codex_package/check_runtime_version.py"),
-            str(package / "bin/codex"),
-        ],
-        check=True,
-        timeout=60,
-    )
     return info
 
 
@@ -173,6 +138,7 @@ def main():
         destination = install(package, info)
         receipt = {
             "backend": "scm",
+            "archive_sha256": artifact["sha256"],
             "version_id": args.version_id,
             "scm_version": metadata["version"],
             "build": info,

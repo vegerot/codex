@@ -90,6 +90,29 @@ def status(profile, state=None):
                 )
             )
             result["live"] = {"cli": str(cli.resolve()), **info}
+            if info["status"] == "running":
+                home = Path(os.environ.get("CODEX_HOME", Path.home() / ".codex"))
+                pid_name = (
+                    "app-server.pid"
+                    if "standalone" in Path(info["managedCodexPath"]).parts
+                    else "daemon.pid"
+                )
+                pid = json.loads((home / "app-server-daemon" / pid_name).read_text())[
+                    "pid"
+                ]
+                if profile == "macos":
+                    from scripts.macos.restart_if_idle import running_executable
+
+                    executable = running_executable(pid)
+                else:
+                    executable = Path(f"/proc/{pid}/exe").resolve(strict=True)
+                result["live"].update(
+                    pid=pid,
+                    running_executable=str(executable),
+                    restart_pending=executable
+                    != Path(info["managedCodexPath"]).resolve(),
+                )
+
         except (OSError, subprocess.SubprocessError, ValueError) as error:
             result["live"] = {"error": str(error)}
     return result

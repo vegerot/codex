@@ -12,7 +12,7 @@ def _dispatch(repo, commit, run_dir, entrypoint, arguments):
     commit = subprocess.check_output(
         ["sl", "log", "--rev", commit, "--template", "{node}"], cwd=repo, text=True
     ).strip()
-    cache = Path.home() / ".cache/codex-nightly-source"
+    cache = snapshot_cache(entrypoint)
     cache.mkdir(parents=True, exist_ok=True)
     source = cache / "source"
     # The caller's build lock serializes this stable cache. Byte comparison retains
@@ -80,7 +80,7 @@ def _dispatch(repo, commit, run_dir, entrypoint, arguments):
 
 
 def dispatch(repo, commit, run_dir, entrypoint, arguments):
-    cache = Path.home() / ".cache/codex-nightly-source"
+    cache = snapshot_cache(entrypoint)
     cache.mkdir(parents=True, exist_ok=True)
     lock = cache / "build.lock"
     try:
@@ -93,3 +93,16 @@ def dispatch(repo, commit, run_dir, entrypoint, arguments):
         _dispatch(repo, commit, run_dir, entrypoint, arguments)
     finally:
         lock.rmdir()
+
+
+def snapshot_cache(entrypoint):
+    name = (
+        "codex-windows-build"
+        if sys.platform == "win32"
+        else (
+            "codex-desktop-build"
+            if entrypoint == "scripts/debian/build.py"
+            else "codex-local-build"
+        )
+    )
+    return Path.home() / ".cache" / name
