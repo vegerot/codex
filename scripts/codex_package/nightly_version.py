@@ -1,5 +1,6 @@
 """Stamp Codex builds with an upstream-based development version."""
 
+import os
 import re
 import subprocess
 
@@ -54,12 +55,22 @@ def stamp_workspace(rust_root, base_version, commit):
 
 
 def nightly_version(commit):
-    refs = subprocess.check_output(
-        ["git", "ls-remote", "--tags", "--refs", UPSTREAM, "rust-v*"],
-        text=True,
-        timeout=120,
-    )
-    base = latest_stable_version(refs)
+    # SCM cannot always read GitHub anonymously. Its authenticated submitter can
+    # resolve the release tag and pass this non-secret build input explicitly.
+    release_tag = os.environ.get("CUSTOM_CODEX_RELEASE_TAG")
+    if release_tag is not None:
+        if not re.fullmatch(r"rust-v\d+\.\d+\.\d+", release_tag):
+            raise ValueError(
+                "CUSTOM_CODEX_RELEASE_TAG must be a stable rust-vX.Y.Z tag"
+            )
+        base = release_tag.removeprefix("rust-v")
+    else:
+        refs = subprocess.check_output(
+            ["git", "ls-remote", "--tags", "--refs", UPSTREAM, "rust-v*"],
+            text=True,
+            timeout=120,
+        )
+        base = latest_stable_version(refs)
     version = f"{base}+dev.{commit[:12]}"
     return {"version": version, "upstream_release_tag": f"rust-v{base}"}
 
