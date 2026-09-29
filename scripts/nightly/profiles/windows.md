@@ -8,3 +8,5 @@ the final versioned directory; do not rename a directory after executing its fil
 Use `sl.exe` in PowerShell (`sl` is a Set-Location alias); Git source operations are allowed only if Sapling is incompatible.
 Build and publish only: do not change launchers, junctions, daemon settings, app
 configuration or running processes. Activation and restart are not requested.
+
+Build command: `python build.py --commit <SHA> --run-dir <run>` (add `--jobs 24`).

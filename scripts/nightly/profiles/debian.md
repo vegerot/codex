@@ -7,3 +7,5 @@ units, no LTO/debug/incremental. Package CLI, Code Mode, ripgrep and source-buil
 bwrap. Activate the verified full package and arrange an independent idle restart
 after successful publication. Do not substitute WSL for native Debian validation
 or mount disks/start stopped distributions as part of deployment.
+
+Build command: `python3 scripts/debian/build.py --commit <SHA> --run-dir <run>`.
