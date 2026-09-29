@@ -22,20 +22,22 @@ voice runtime; see the Mac profile TODO.
 
 `verify --profile <profile> --run-dir <run> --package <package>` writes final
 verification evidence. `activate --profile <profile> --run-dir <run>` selects that
-verified package on Unix, under the daemon install lock. It never restarts.
+verified terminal CLI package on Unix. Only personal Debian also selects the
+managed daemon under its install lock. macOS/devbox keep official desktop daemons
+and their upstream updater. It never restarts.
 `record --stage build|publish --status success|failed|skipped --evidence <JSON>
 --run-dir <run>` records observed outcomes. Source synchronization/publication
 remain agent-directed; scripts do not guess which patches to drop or rebase.
 
-After successful publication, `restart --run-dir <run>` starts an independent
+On personal Debian, after successful publication, `restart --run-dir <run>` starts an independent
 worker from a saved copy of the scripts. Linux dispatch returns immediately so
 the coordinating task can become idle; worker output is saved in restart.log.
 It checks all tasks/queues, including the
 nightly task, for up to 30 minutes. A busy daemon stays pending until a subsequent
 nightly/manual retry. `restart --run-dir <run> --check` inspects without signaling.
-Linux uses pidfd and the user `codex-nightly-daemon-start.service` linked from
-this directory (install it on Debian and Devbox); Mac verifies PID
-identity and sends graceful SIGHUP. Neither force-kills work. Windows is build-only.
+Debian uses pidfd and the user `codex-nightly-daemon-start.service` linked from
+this directory, then sends graceful SIGHUP without force-killing work. macOS/devbox nightly
+restart commands return not_requested. Windows is build-only.
 
 `status --profile <profile> [--json]` is host-local: latest attempt, latest verified
 package, each stage, selected CLI/daemon and running version. A failed attempt
@@ -46,5 +48,6 @@ loaded it.
 
 Devbox keeps its 03:00 Pacific systemd timer. macOS keeps 06:00, Debian
 04:00 and Windows 05:00 in their existing task registries. No new recurring timers.
-Reload systemd after unit changes and inspect its next trigger. Validate Debian
+See [desktop backend selection](desktop-backends.md) for host setup and the
+Windows/personal Debian follow-up. Reload systemd after unit changes and inspect its next trigger. Validate Debian
 on native Debian, not WSL; preserve Windows junctions and activation settings.

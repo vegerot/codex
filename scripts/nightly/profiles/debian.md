@@ -1,5 +1,6 @@
-# Debian desktop
+# Personal Debian desktop
 
+This is the desktop exception: keep the self-built CLI and App Server.
 Native Debian, existing 04:00 America/Los_Angeles heartbeat. Build locally from a
 committed snapshot, preserving stable Cargo cache/source paths. Keep the 15 GiB
 free-space requirement, memory-derived jobs capped at 16, clang/lld-19, 16 codegen

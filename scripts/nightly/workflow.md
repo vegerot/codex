@@ -59,10 +59,13 @@ Keep doctor warnings distinct from failures. Verify platform requirements in the
 profile. Record downloaded artifact hashes separately from final package hashes
 when relocation/signing changes files. Compilation success alone is insufficient.
 
-On Unix, select only a verified versioned package for CLI and managed daemon,
-discovering the daemon namespace. Under its install lock preserve settings,
-disable upstream automatic updates and remove stale latest-release markers.
-Record activation separately from the running daemon. Windows is build-only.
+On Unix, select only a verified versioned package for the terminal CLI. On
+personal Debian also select the managed daemon, discover its namespace, disable
+upstream automatic updates under its install lock and remove stale latest-release
+markers. macOS and devbox desktop/SSH/Remote Control backends use official Codex;
+never select a nightly for their daemon or disable its official updater. Preserve
+app executable selection. Record CLI activation separately from the daemon.
+Windows is build-only; its desktop app uses its official bundled executable.
 
 Confirm HEAD still equals the tested SHA with no new tracked changes. Publish
 exactly that SHA with an explicit expected-tip lease:
@@ -71,8 +74,11 @@ Git is used solely for the explicit lease. Verify the remote ref afterward. If
 concurrent publication rejects the lease, reconcile, rebuild and verify the combined
 source before retrying. Never force-push unconditionally.
 
-Only after build, verification, Unix activation, and publication succeed, arrange
-an independent idle restart worker. It checks every loaded task and queue, including
+Only on personal Debian, after build, verification, activation, and publication
+succeed, arrange an independent idle restart worker. macOS and devbox nightly
+runs record restart as not_requested; their official daemons are independent of
+the terminal nightly package. The Debian worker checks every loaded task and
+queue, including
 the coordinator. Active ephemeral tasks block; idle ephemeral tasks need no queue
 lookup. Never force-kill work or restart ChatGPT-owned processes. Wait at most
 30 minutes, then leave restart pending for the next nightly/manual retry. Do not

@@ -4,7 +4,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import patch, Mock, MagicMock
 
 from scripts.codex_package.nightly import initialize, record_stage, status
 from scripts.codex_package.restart_nightly import require_published
@@ -44,6 +44,27 @@ class RunTests(unittest.TestCase):
                     require_published(run)
                 record_stage(run, stage, "success")
             self.assertEqual(require_published(run)["profile"], "devbox")
+
+    def test_desktop_nightlies_never_schedule_or_run_a_daemon_restart(self):
+        from scripts.codex_package.restart_nightly import schedule, finish
+
+        for profile in ("macos", "devbox"):
+            with (
+                self.subTest(profile=profile),
+                tempfile.TemporaryDirectory() as temporary,
+                patch("scripts.codex_package.nightly.subprocess.check_output",
+                      return_value="a" * 40),
+            ):
+                run = initialize(profile, state=Path(temporary))
+                record = json.loads((run / "run.json").read_text())
+                self.assertEqual(record["stages"]["restart"], {"status": "not_requested"})
+                for stage in ("build", "verify", "activate", "publish"):
+                    record_stage(run, stage, "success")
+                with patch("subprocess.Popen") as spawn, patch("subprocess.run") as run_cmd:
+                    self.assertEqual(schedule(run)["status"], "not_requested")
+                    self.assertEqual(finish(run)["status"], "not_requested")
+                    spawn.assert_not_called()
+                    run_cmd.assert_not_called()
 
     def test_windows_does_not_request_activation_or_restart(self):
         with (
@@ -105,12 +126,14 @@ class RestartFailureTests(unittest.TestCase):
                 return_value="a" * 40,
             ),
         ):
-            run = initialize("macos", state=Path(temporary))
+            run = initialize("debian", state=Path(temporary))
             for stage in ("build", "verify", "activate", "publish"):
                 record_stage(run, stage, "success", package=temporary)
-            with patch(
-                "scripts.macos.restart_if_idle.restart",
-                side_effect=OSError("control socket unavailable"),
+            module = Mock()
+            module.restart.side_effect = OSError("control socket unavailable")
+            with (
+                patch("importlib.util.spec_from_file_location", return_value=MagicMock()),
+                patch("importlib.util.module_from_spec", return_value=module),
             ):
                 result = finish(run)
             self.assertEqual(
@@ -137,7 +160,7 @@ class RestartFailureTests(unittest.TestCase):
                 return_value="a" * 40,
             ),
         ):
-            run = initialize("macos", state=Path(temporary))
+            run = initialize("debian", state=Path(temporary))
             for stage in ("build", "verify", "activate", "publish"):
                 record_stage(run, stage, "success", package=temporary)
             record = json.loads((run / "run.json").read_text())
@@ -151,7 +174,7 @@ class RestartFailureTests(unittest.TestCase):
                     "notify",
                     new=AsyncMock(side_effect=[OSError("offline"), None, None]),
                 ) as notify,
-                patch("scripts.macos.restart_if_idle.restart") as restart,
+                patch("importlib.util.spec_from_file_location") as restart,
             ):
                 with self.assertRaisesRegex(OSError, "offline"):
                     finish(run)

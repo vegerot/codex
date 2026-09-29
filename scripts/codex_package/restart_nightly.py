@@ -1,4 +1,4 @@
-"""Bounded idle restart of the package recorded by a published Unix run."""
+"""Bounded idle restart of a published personal Debian package."""
 
 from functools import partial
 import importlib.util
@@ -24,7 +24,9 @@ def require_published(run):
 
 
 def schedule(run):
-    require_published(run)
+    record = require_published(run)
+    if record["profile"] != "debian":
+        return {"status": "not_requested", "reason": "Desktop daemon uses official Codex"}
     frozen = run / "helpers"
     if not frozen.exists():
         shutil.copytree(
@@ -88,6 +90,8 @@ def finish(run, check=False):
     import fcntl
 
     record = require_published(run)
+    if record["profile"] != "debian":
+        return {"status": "not_requested", "reason": "Desktop daemon uses official Codex"}
     package = Path(record["stages"]["verify"]["package"])
     with (run / "restart.lock").open("a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -99,19 +103,14 @@ def finish(run, check=False):
                 return previous
             shutil.copy2(saved, run / f"restart-attempt-{time.time_ns()}.json")
         deadline = time.monotonic() + 1800
-        if record["profile"] == "macos":
-            from scripts.macos.restart_if_idle import restart
-
-            action = partial(restart, package, check_only=check, deadline=deadline)
-        else:
-            spec = importlib.util.spec_from_file_location(
-                "linux_restart", ROOT / "scripts/devbox/restart-if-idle.py"
-            )
-            module = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(module)
-            action = partial(
-                module.restart, check_only=check, package=package, deadline=deadline
-            )
+        spec = importlib.util.spec_from_file_location(
+            "linux_restart", ROOT / "scripts/devbox/restart-if-idle.py"
+        )
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        action = partial(
+            module.restart, check_only=check, package=package, deadline=deadline
+        )
         while True:
             try:
                 result = action()
