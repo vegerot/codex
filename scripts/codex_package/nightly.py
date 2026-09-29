@@ -90,7 +90,14 @@ def status(profile, state=None):
                 )
             )
             result["live"] = {"cli": str(cli.resolve()), **info}
-            if info["status"] == "running":
+            if info["status"] == "running" and info.get("backend") != "pid":
+                result["live"].update(
+                    ownership="unmanaged",
+                    restart_pending=info["appServerVersion"]
+                    != info["managedCodexVersion"],
+                    restart_reason="Running App Server is not managed by codex app-server daemon",
+                )
+            elif info["status"] == "running":
                 home = Path(os.environ.get("CODEX_HOME", Path.home() / ".codex"))
                 pid_name = (
                     "app-server.pid"
@@ -114,5 +121,5 @@ def status(profile, state=None):
                 )
 
         except (OSError, subprocess.SubprocessError, ValueError) as error:
-            result["live"] = {"error": str(error)}
+            result.setdefault("live", {})["error"] = str(error)
     return result

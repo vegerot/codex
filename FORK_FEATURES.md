@@ -60,7 +60,8 @@ or which scheduled tasks are enabled.
 - **Shared nightly workflow:** four platform profiles use one missing-patch replay
   procedure, committed helper snapshots, complete packages, and separate build,
   verification, activation, publication and restart records. Unix restarts wait
-  for idle after publication; Windows remains build-only. A host-local status
+  for idle after publication and leave unmanaged App Servers untouched; Windows
+  remains build-only. A host-local status
   command reports selected and running packages. [Operations](scripts/nightly/README.md)
 
 ## Keeping this list current

@@ -74,6 +74,7 @@ class ActivationTests(unittest.TestCase):
         info = {
             "managedCodexPath": str(self.current / "bin/codex"),
             "status": "running",
+            "backend": "pid",
             "appServerVersion": "stock",
         }
         with (
@@ -99,6 +100,7 @@ class ActivationTests(unittest.TestCase):
         info = {
             "managedCodexPath": str(self.current / "bin/codex"),
             "status": "running",
+            "backend": "pid",
             "appServerVersion": "stock",
         }
         with (
@@ -128,3 +130,22 @@ class ActivationTests(unittest.TestCase):
                 [str(self.package / "bin/codex"), "app-server", "daemon", "start"],
                 check=True,
             )
+
+    def test_unmanaged_server_is_not_signaled_or_treated_as_missing_pid(self):
+        self.activate()
+        info = {
+            "status": "running",
+            "managedCodexPath": str(self.current / "bin/codex"),
+        }
+        with (
+            patch.object(idle, "version", return_value=info),
+            patch.object(idle.os, "kill") as kill,
+        ):
+            self.assertEqual(
+                idle.restart(self.package),
+                {
+                    "status": "deferred",
+                    "reason": "Running App Server is not managed by codex app-server daemon",
+                },
+            )
+            kill.assert_not_called()
