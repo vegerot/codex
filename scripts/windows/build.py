@@ -92,9 +92,17 @@ def build_windows(repo: Path, command: list[str], *, jobs: int) -> None:
         "LIBSQLITE3_FLAGS": "SQLITE_DISABLE_INTRINSIC",
         "STABLE_GIT_COMMIT": commit,
     }
-    # Rustup proxy symlinks can be rejected as untrusted Windows mount points.
-    # `run` selects the real pinned-toolchain executable without that proxy.
-    command = ["rustup", "run", toolchain, *command]
+    # Windows may reject Rustup's proxy symlinks as untrusted mount points.
+    # Select the real pinned binaries for Cargo and every compiler subprocess.
+    compiler = Path(
+        subprocess.check_output(
+            ["rustup", "which", "--toolchain", toolchain, "rustc"], text=True
+        ).strip()
+    )
+    env["PATH"] = str(compiler.parent) + os.pathsep + env["PATH"]
+    env["RUSTC"] = str(compiler)
+    env["RUSTDOC"] = str(compiler.with_name("rustdoc.exe"))
+    command = [str(compiler.with_name("cargo.exe")), *command[1:]]
     info = {
         "commit": commit,
         **version,
