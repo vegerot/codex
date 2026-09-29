@@ -123,8 +123,10 @@ def report_result(run, record, result):
     if not thread:
         return
     receipt = run / "notification.json"
-    if receipt.exists() and json.loads(receipt.read_text())["status"] == "sent":
-        return
+    if receipt.exists():
+        previous = json.loads(receipt.read_text())
+        if previous["status"] == "sent" and previous.get("result") == result:
+            return
     from scripts.codex_package.rpc import notify
 
     try:
@@ -136,6 +138,8 @@ def report_result(run, record, result):
             )
         )
     except Exception as error:
-        atomic_json(receipt, {"status": "error", "reason": str(error)})
+        atomic_json(
+            receipt, {"status": "error", "reason": str(error), "result": result}
+        )
         raise
-    atomic_json(receipt, {"status": "sent"})
+    atomic_json(receipt, {"status": "sent", "result": result})
