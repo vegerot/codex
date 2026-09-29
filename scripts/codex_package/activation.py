@@ -1,4 +1,4 @@
-"""Select personal CLI packages; only personal Debian also selects the daemon."""
+"""Unix package selection under the managed daemon install lock."""
 
 import fcntl
 import json
@@ -8,7 +8,7 @@ import subprocess
 
 
 def select_package(package, current, launchers, settings_file):
-    links = {current: package} if current is not None else {}
+    links = {current: package}
     links.update(
         {
             launchers / name: package / "bin" / name
@@ -18,19 +18,17 @@ def select_package(package, current, launchers, settings_file):
     for link in links:
         if link.exists() and not link.is_symlink():
             raise RuntimeError(f"Refusing to overwrite non-symlink: {link}")
-    lock_root = current.parent if current is not None else launchers
-    lock_root.mkdir(parents=True, exist_ok=True)
-    with (lock_root / "install.lock").open("a") as lock:
+    current.parent.mkdir(parents=True, exist_ok=True)
+    with (current.parent / "install.lock").open("a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        if current is not None:
-            settings = (
-                json.loads(settings_file.read_text()) if settings_file.exists() else {}
-            )
-            settings.setdefault("updater", {})["autoUpdateEnabled"] = False
-            settings_file.parent.mkdir(parents=True, exist_ok=True)
-            temporary = settings_file.with_suffix(f".nightly-{os.getpid()}.tmp")
-            temporary.write_text(json.dumps(settings, indent=2) + "\n")
-            temporary.replace(settings_file)
+        settings = (
+            json.loads(settings_file.read_text()) if settings_file.exists() else {}
+        )
+        settings.setdefault("updater", {})["autoUpdateEnabled"] = False
+        settings_file.parent.mkdir(parents=True, exist_ok=True)
+        temporary = settings_file.with_suffix(f".nightly-{os.getpid()}.tmp")
+        temporary.write_text(json.dumps(settings, indent=2) + "\n")
+        temporary.replace(settings_file)
         previous = {
             str(link): str(link.readlink()) if link.is_symlink() else None
             for link in links
@@ -40,8 +38,7 @@ def select_package(package, current, launchers, settings_file):
             temporary = link.with_name(f".{link.name}.nightly-{os.getpid()}")
             temporary.symlink_to(target)
             temporary.replace(link)
-        if current is not None:
-            (current.parent / "auto-update-version").unlink(missing_ok=True)
+        (current.parent / "auto-update-version").unlink(missing_ok=True)
     return previous
 
 
@@ -58,16 +55,14 @@ def activate_verified(run):
     package = Path(verified["package"]).resolve()
     if hashes(package) != verified["hashes"]:
         raise RuntimeError("Package changed after verification")
-    current = None
-    if record["profile"] == "debian":
-        info = json.loads(
-            subprocess.check_output(
-                [str(package / "bin/codex"), "app-server", "daemon", "version"], text=True
-            )
+    info = json.loads(
+        subprocess.check_output(
+            [str(package / "bin/codex"), "app-server", "daemon", "version"], text=True
         )
-        current = Path(info["managedCodexPath"]).parent.parent
-        if current.name != "current":
-            raise RuntimeError(f"Unexpected daemon package path: {current}")
+    )
+    current = Path(info["managedCodexPath"]).parent.parent
+    if current.name != "current":
+        raise RuntimeError(f"Unexpected daemon package path: {current}")
     home = Path(os.environ.get("CODEX_HOME", Path.home() / ".codex"))
     previous = select_package(
         package,
@@ -75,10 +70,6 @@ def activate_verified(run):
         Path.home() / ".local/bin",
         home / "app-server-daemon/settings.json",
     )
-    restart = "pending" if current is not None else "not_requested"
-    record_stage(
-        run, "activate", "success", package=str(package), previous=previous,
-        daemon_selected=current is not None,
-    )
-    record_stage(run, "restart", restart, package=str(package))
-    return {"package": str(package), "restart": restart}
+    record_stage(run, "activate", "success", package=str(package), previous=previous)
+    record_stage(run, "restart", "pending", package=str(package))
+    return {"package": str(package), "restart": "pending"}

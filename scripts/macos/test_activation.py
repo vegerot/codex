@@ -10,7 +10,7 @@ import unittest
 from unittest.mock import patch, AsyncMock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from scripts.codex_package.activation import select_package
+from scripts.codex_package.activation import select_package, activate_verified
 from scripts.macos import restart_if_idle as idle
 
 
@@ -44,6 +44,31 @@ class ActivationTests(unittest.TestCase):
             {"updater": {"autoUpdateEnabled": False}},
         )
 
+    def test_every_unix_profile_selects_source_backend_as_well_as_cli(self):
+        for profile in ("macos", "devbox", "debian"):
+            with self.subTest(profile=profile):
+                run = self.home / profile
+                run.mkdir()
+                (run / "run.json").write_text(json.dumps({
+                    "profile": profile,
+                    "stages": {"verify": {"status": "success",
+                        "package": str(self.package), "hashes": {"codex": "verified"}}},
+                }))
+                with (
+                    patch("pathlib.Path.home", return_value=self.home),
+                    patch.dict("os.environ", {"CODEX_HOME": str(self.home)}),
+                    patch("scripts.codex_package.verify_nightly.hashes",
+                          return_value={"codex": "verified"}),
+                    patch("scripts.codex_package.activation.subprocess.check_output",
+                          return_value=json.dumps({"managedCodexPath": str(self.current / "bin/codex")})),
+                ):
+                    result = activate_verified(run)
+                self.assertEqual(self.current.resolve(), self.package)
+                self.assertEqual((self.home / ".local/bin/codex").resolve(),
+                                 self.current.resolve() / "bin/codex")
+                self.assertEqual(result["restart"], "pending")
+                self.assertFalse(json.loads(self.settings.read_text())["updater"]["autoUpdateEnabled"])
+
     def test_preserves_other_settings(self):
         self.settings.parent.mkdir()
         original = {
@@ -55,20 +80,6 @@ class ActivationTests(unittest.TestCase):
         self.activate()
         original["updater"]["autoUpdateEnabled"] = False
         self.assertEqual(json.loads(self.settings.read_text()), original)
-
-    def test_cli_only_selection_preserves_official_daemon_and_updater(self):
-        marker = self.current.parent / "auto-update-version"
-        marker.write_text("official")
-        self.settings.parent.mkdir()
-        original = {"remoteControlEnabled": True, "updater": {"autoUpdateEnabled": True}}
-        self.settings.write_text(json.dumps(original))
-        previous = select_package(self.package, None, self.launchers, self.settings)
-        self.assertEqual(self.current.readlink(), Path("old-package"))
-        self.assertEqual(marker.read_text(), "official")
-        self.assertEqual(json.loads(self.settings.read_text()), original)
-        self.assertEqual(set(previous), {str(self.launchers / name) for name in
-                                      ("codex", "codex-code-mode-host")})
-        self.assertEqual((self.launchers / "codex").resolve(), self.package / "bin/codex")
 
     def test_inflight_installer_blocks_selection(self):
         with (self.current.parent / "install.lock").open("a") as lock:

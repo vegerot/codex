@@ -1,73 +1,82 @@
-# Desktop backend selection
+# Desktop and CLI backend selection
 
-Desktop backends use official Codex on macOS, devbox and Windows. Personal
-Debian is the exception and keeps the self-built backend. Terminal CLI builds
-remain personal on all hosts. A self-built terminal client attached to an official
-daemon retains its terminal rendering changes, but backend instrumentation comes
-from official Codex.
+The CLI runs all source-built agent code, including its managed App Server,
+model/tool orchestration and Code Mode host. Native Mac/Windows desktop apps
+use official backends. Personal Debian remains entirely source-built. Desktop
+connections to the devbox use that host's source-built backend.
+
+| Connection | Backend |
+|---|---|
+| Mac terminal CLI | Source-built managed App Server |
+| Mac desktop, local project | Official app-owned App Server |
+| Mac desktop, SSH/Remote Control to devbox | Devbox source-built managed App Server |
+| Devbox terminal CLI | Same devbox source-built managed App Server |
+| Windows terminal CLI | Source-built backend; native verification pending |
+| Windows desktop, local project | Official app-owned backend; native verification pending |
+| Personal Debian CLI and desktop | Source-built backend |
+
+Keep one shared daemon on the devbox. A separate official remote desktop server
+would add service, routing and update configuration without a current benefit.
+Keep the same Codex home and history/authentication paths.
 
 ## macOS
 
-Remove the app executable override:
+Keep these desktop-only launchctl settings unset:
 
 ```sh
 launchctl unsetenv CODEX_CLI_PATH
+launchctl unsetenv CODEX_APP_SERVER_USE_LOCAL_DAEMON
 ```
 
-Quit and reopen ChatGPT when its tasks are idle. Without the override, this app
-resolves its own bundled `codex-cli/CodexCLI.app/Contents/MacOS/codex`, including
-matching helper runtimes. Do not point the desktop at `~/.local/bin/codex` or a
-fixed version under `packages/standalone/releases`. The managed daemon also uses
-an official package in `~/.codex/packages/app-server-daemon`, with automatic
-updates enabled; local desktop sessions currently use a separate app-owned server.
+Reopen ChatGPT when its tasks are idle. Without the executable override, this app
+resolves its bundled `codex-cli/CodexCLI.app/Contents/MacOS/codex`, including matching
+helper runtimes. Its local App Server uses private stdio pipes and remains separate
+from the CLI daemon. Do not point it at `~/.local/bin/codex` or enable attachment to
+the CLI's shared local daemon.
+
+The terminal launcher and managed daemon both select the verified source package.
+The daemon's upstream automatic updater stays disabled; nightlies own its updates.
 
 ## Devbox
 
-Desktop SSH and Remote Control reach the shared managed daemon. Keep its official
-package and upstream updater independent of `~/.local/bin/codex`, which remains
-self-built. In the shared `.zshenv`, devbox login shells with
-`CODEX_REMOTE_PAYLOAD` export
-`CODEX_INSTALL_DIR=$HOME/.codex/packages/app-server-daemon/current/bin`. The desktop
-SSH launcher prepends that directory to PATH for its bootstrap and proxy commands;
-ordinary terminal shells keep the personal CLI. Personal Debian does not match
-this host condition. Do not add a second Codex home or change history/authentication
-paths.
-Use `codex app-server daemon version` and the PID's `/proc/<pid>/exe` to verify
-both selected and running binaries. Once installed in the dedicated daemon
-namespace, `codex app-server daemon update` follows production updates; run it
-when tasks are idle because manual updates can interrupt work.
+Normal terminal clients, Desktop SSH and Remote Control use the source-built daemon.
+Remove the devbox-only CODEX_INSTALL_DIR override previously added to `.zshenv`.
+Desktop SSH should resolve `~/.local/bin/codex`, which selects the source package.
+Use `codex app-server daemon version` and `/proc/<pid>/exe` to verify both selected
+and running binaries. A client executable path alone does not establish its backend.
 
 ## Windows, when available
 
-Use native PowerShell. Clear the desktop executable override from both the user
-environment and the current shell, then quit and reopen ChatGPT when idle:
+Use native PowerShell. Clear the native desktop executable override from both the
+user environment and the current shell, then reopen ChatGPT when idle:
 
 ```powershell
 [Environment]::SetEnvironmentVariable('CODEX_CLI_PATH', $null, 'User')
 Remove-Item Env:CODEX_CLI_PATH -ErrorAction SilentlyContinue
+[Environment]::SetEnvironmentVariable('CODEX_APP_SERVER_USE_LOCAL_DAEMON', $null, 'User')
+Remove-Item Env:CODEX_APP_SERVER_USE_LOCAL_DAEMON -ErrorAction SilentlyContinue
 [Environment]::GetEnvironmentVariable('CODEX_CLI_PATH', 'Machine')
 ```
 
-The last command should be empty. If it reports a machine-wide override, remove
-that override from an elevated PowerShell window too. The desktop then resolves
-its official bundled/registered executable and matching helpers. Keep the nightly
-build task build-only. If Windows uses a managed daemon for desktop access, run
-`codex app-server daemon update` when idle and verify its selected/running version;
-if the old installation cannot migrate, inspect its actual package before changing
-junctions. Do not guess a package path or replace the terminal launcher.
+If a machine-wide executable override is reported, remove that value from an
+elevated PowerShell window. Preserve the source-built CLI daemon; do not run
+`codex app-server daemon update`, which restores an official daemon. Native Windows
+junction/config traversal and actual desktop routing still need verification.
+Windows nightly builds remain build-only until activation is separately authorized.
 
 ## Personal Debian, when available
 
-Keep the self-built desktop App Server and daemon. Update the Codex working copy
-to include this policy, then run the existing Debian nightly workflow. Its CLI and
-daemon activation/restart remain enabled. No desktop executable reset is needed.
-If the app owns an unmanaged App Server, quit/reopen its owner when idle and check
-its loaded executable; a CLI launcher change alone does not restart that server.
+Keep its source-built CLI, daemon and desktop App Server. No desktop executable
+reset is needed. If its application owns an unmanaged App Server, restart through
+that owner when idle and verify the loaded executable.
 
-## Nightly ownership
+## Startup and nightly ownership
 
-Mac/devbox activation changes only terminal CLI launchers. It preserves daemon
-selection/settings/update markers and records daemon restart as `not_requested`.
-Debian activation selects both CLI and daemon, disables its upstream updater and
-retains publication-gated idle restart. Windows stays build-only. Build tasks must
-not restore desktop overrides or attach a personal package to an official daemon.
+Normal CLI startup reuses the selected managed package; it does not replace it
+with whichever client launches first. Mac local desktop has a separate App Server.
+The initial install on a host with no daemon selection can seed a package from
+its initiating CLI; explicit package selection removes that ambiguity on later boots.
+
+Unix nightlies activate the verified complete source package for both terminal CLI
+and managed daemon, disable the daemon's upstream updater, and arrange an independent
+idle restart after publication. They leave native desktop App Servers untouched.
