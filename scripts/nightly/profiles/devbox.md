@@ -1,6 +1,6 @@
 # Devbox
 
-Linux x86_64; existing systemd schedule at 05:00 America/Los_Angeles.
+Linux x86_64; existing systemd schedule at 03:00 America/Los_Angeles.
 Use SCM only, never local Rust compilation or Rust tests. Source/format and Python
 helper tests are local; validate compiled artifacts from SCM.
 
