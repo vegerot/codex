@@ -3,9 +3,10 @@
 Brief inventory of the current fork’s behavior changes and build tooling. Related
 fixes are grouped together rather than listed once per commit.
 
-Reviewed 2026-09-28: fork `9bf534ddc805` against locally recorded
-`upstream/main` (`1b1835f751eb`), covering 26 fork commits. This describes source
-changes, not which version is installed or which scheduled tasks are enabled.
+Runtime inventory reviewed 2026-09-28 against locally recorded `upstream/main`
+(`1b1835f751eb`); build workflows updated through the shared-nightly refactor
+(`616ab14cd417`). This describes source changes, not which version is installed
+or which scheduled tasks are enabled.
 
 ## Runtime changes
 
