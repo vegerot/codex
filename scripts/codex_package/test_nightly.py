@@ -147,7 +147,7 @@ class RestartFailureTests(unittest.TestCase):
             with (
                 patch(
                     "scripts.codex_package.rpc.notify",
-                    new=AsyncMock(side_effect=[OSError("offline"), None]),
+                    new=AsyncMock(side_effect=[OSError("offline"), None, None]),
                 ) as notify,
                 patch("scripts.macos.restart_if_idle.restart") as restart,
             ):
@@ -156,4 +156,8 @@ class RestartFailureTests(unittest.TestCase):
                 self.assertEqual(finish(run), result)
                 self.assertEqual(finish(run), result)
                 self.assertEqual(notify.await_count, 2)
+                updated = {"status": "already-current", "version": "new-attempt"}
+                (run / "restart.json").write_text(json.dumps(updated))
+                self.assertEqual(finish(run), updated)
+                self.assertEqual(notify.await_count, 3)
                 restart.assert_not_called()
