@@ -45,10 +45,10 @@ or which scheduled tasks are enabled.
   accepts a stable release tag resolved by the authenticated submitter, so workers
   need no GitHub credentials for release lookup. Artifact acquisition
   and verification are separate from activation. Unix
-  activation selects the package for the terminal CLI. Only personal Debian also
-  selects the self-built daemon and disables its upstream updater; macOS/devbox
-  desktop backends keep official Codex and official updates. A Debian worker
-  restarts after publication and idle checks.
+  activation selects the package for CLI and daemon and disables upstream
+  automatic updates; a separate worker restarts after publication and idle checks.
+  Native Mac/Windows desktop apps retain their official bundled backends; remote
+  devbox desktop connections share the source-built server.
   [Linux details](scripts/devbox/README.md) · [Mac details](scripts/macos/README.md)
 - **Devbox nightly workflow:** repository-owned 3 AM Pacific scheduling, dispatch
   through an existing Codex task, verified package installation, saved run
@@ -63,9 +63,8 @@ or which scheduled tasks are enabled.
 
 - **Shared nightly workflow:** four platform profiles use one missing-patch replay
   procedure, committed helper snapshots, complete packages, and separate build,
-  verification, activation, publication and restart records. Personal Debian
-  restarts wait for idle after publication and leave unmanaged App Servers
-  untouched; macOS/devbox nightlies leave official desktop daemons alone. Windows
+  verification, activation, publication and restart records. Unix restarts wait
+  for idle after publication and leave unmanaged App Servers untouched; Windows
   remains build-only. A host-local status
   command reports selected and running packages. [Operations](scripts/nightly/README.md)
 

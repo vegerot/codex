@@ -20,7 +20,10 @@ Keep the memory guard, 32-job cap, V8 resolver and source-built bwrap. Do not en
 optional patched zsh. Require 8 GiB free for download/staging. Use
 scripts/devbox/install-scm.py for authenticated artifact acquisition. Keep tokens
 in memory. Validate bwrap execution as well as the shared package checks.
-The coordinator delegates the build worker using coordinator.md. Activate only
-the terminal CLI. Desktop SSH and Remote Control use the official managed daemon,
-with its upstream updater enabled. Never replace that daemon with a nightly or
-schedule a nightly daemon restart.
+The coordinator delegates the build worker using coordinator.md and schedules
+an independent systemd finisher only after publication succeeds.
+
+The CLI, Desktop SSH and Remote Control share the source-built managed daemon.
+Keep one Codex home and one managed server; do not add an official desktop-only
+service or change CODEX_INSTALL_DIR to a separate backend. Official native desktop
+backends on Mac/Windows do not imply an official backend for remote devbox work.

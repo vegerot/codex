@@ -51,8 +51,6 @@ def initialize(profile, coordinator=None, state=None):
     if profile == "windows":
         for stage in ("activate", "restart"):
             record["stages"][stage] = {"status": "not_requested"}
-    if profile in ("macos", "devbox"):
-        record["stages"]["restart"] = {"status": "not_requested"}
     atomic_json(run / "run.json", record)
     atomic_json(state / "latest-attempt.json", {"run_dir": str(run)})
     return run
