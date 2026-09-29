@@ -31,7 +31,10 @@ async def busy_threads(rpc):
             # cannot establish idleness. Never exclude the nightly's own task.
             if status not in ("idle", "notLoaded"):
                 busy.append({"threadId": thread_id, "status": status})
-            else:
+            elif not thread.get("ephemeral", False):
+                # Ephemeral tasks have no submission queue. Their active status
+                # still blocks restart above; only the unsupported queue query
+                # is skipped for an idle ephemeral task.
                 queue = await rpc(
                     "thread/queue/list", {"threadId": thread_id, "limit": 1}
                 )
