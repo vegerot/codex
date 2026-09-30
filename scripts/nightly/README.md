@@ -22,7 +22,8 @@ voice runtime; see the Mac profile TODO.
 
 `verify --profile <profile> --run-dir <run> --package <package>` writes final
 verification evidence. `activate --profile <profile> --run-dir <run>` selects that
-verified package on Unix, under the daemon install lock. It never restarts.
+verified CLI and managed-daemon package under the install lock. Windows uses a
+separate codex.cmd launcher and user PATH; Unix uses symlinks. It never restarts.
 `record --stage build|publish --status success|failed|skipped --evidence <JSON>
 --run-dir <run>` records observed outcomes. Source synchronization/publication
 remain agent-directed; scripts do not guess which patches to drop or rebase.
@@ -35,7 +36,8 @@ nightly task, for up to 30 minutes. A busy daemon stays pending until a subseque
 nightly/manual retry. `restart --run-dir <run> --check` inspects without signaling.
 Linux uses pidfd and the user `codex-nightly-daemon-start.service` linked from
 this directory (install it on Debian and Devbox); Mac verifies PID
-identity and sends graceful SIGHUP. Neither force-kills work. Windows is build-only.
+identity and sends graceful SIGHUP. Windows uses a hidden worker and the managed
+daemon shutdown endpoint, never force termination. Neither force-kills work. Windows activates the verified source CLI and its separate daemon; desktop packages, settings and app-owned processes remain untouched.
 
 `status --profile <profile> [--json]` is host-local: latest attempt, latest verified
 package, each stage, selected CLI/daemon and running version. A failed attempt
@@ -47,4 +49,4 @@ loaded it.
 Devbox keeps its 03:00 Pacific systemd timer. macOS keeps 06:00, Debian
 04:00 and Windows 05:00 in their existing task registries. No new recurring timers.
 Reload systemd after unit changes and inspect its next trigger. Validate Debian
-on native Debian, not WSL; preserve Windows junctions and activation settings.
+on native Debian, not WSL; keep native desktop runtimes separate from source CLI activation on Windows.

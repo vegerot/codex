@@ -48,9 +48,6 @@ def initialize(profile, coordinator=None, state=None):
         "helper_revision": None,
         "stages": {stage: {"status": "pending"} for stage in STAGES},
     }
-    if profile == "windows":
-        for stage in ("activate", "restart"):
-            record["stages"][stage] = {"status": "not_requested"}
     atomic_json(run / "run.json", record)
     atomic_json(state / "latest-attempt.json", {"run_dir": str(run)})
     return run
@@ -80,46 +77,46 @@ def status(profile, state=None):
             else None
         )
     if profile == "windows":
-        result["live"] = {"activation": "not_requested"}
+        cli = Path.home() / ".local/share/codex-windows-build/current/bin/codex.exe"
     else:
         cli = Path.home() / ".local/bin/codex"
-        try:
-            info = json.loads(
-                subprocess.check_output(
-                    [str(cli), "app-server", "daemon", "version"], text=True, timeout=30
-                )
+    try:
+        info = json.loads(
+            subprocess.check_output(
+                [str(cli), "app-server", "daemon", "version"], text=True, timeout=30
             )
-            result["live"] = {"cli": str(cli.resolve()), **info}
-            if info["status"] == "running" and info.get("backend") != "pid":
-                result["live"].update(
-                    ownership="unmanaged",
-                    restart_pending=info["appServerVersion"]
-                    != info["managedCodexVersion"],
-                    restart_reason="Running App Server is not managed by codex app-server daemon",
-                )
-            elif info["status"] == "running":
-                home = Path(os.environ.get("CODEX_HOME", Path.home() / ".codex"))
-                pid_name = (
-                    "app-server.pid"
-                    if "standalone" in Path(info["managedCodexPath"]).parts
-                    else "daemon.pid"
-                )
-                pid = json.loads((home / "app-server-daemon" / pid_name).read_text())[
-                    "pid"
-                ]
-                if profile == "macos":
-                    from scripts.macos.restart_if_idle import running_executable
+        )
+        result["live"] = {"cli": str(cli.resolve()), **info}
+        if info["status"] == "running" and info.get("backend") != "pid":
+            result["live"].update(
+                ownership="unmanaged",
+                restart_pending=info["appServerVersion"] != info["managedCodexVersion"],
+                restart_reason="Running App Server is not managed by codex app-server daemon",
+            )
+        elif info["status"] == "running":
+            home = Path(os.environ.get("CODEX_HOME", Path.home() / ".codex"))
+            pid_name = (
+                "app-server.pid"
+                if "standalone" in Path(info["managedCodexPath"]).parts
+                else "daemon.pid"
+            )
+            pid = json.loads((home / "app-server-daemon" / pid_name).read_text())["pid"]
+            if profile == "windows":
+                from scripts.windows.activation import process_identity
 
-                    executable = running_executable(pid)
-                else:
-                    executable = Path(f"/proc/{pid}/exe").resolve(strict=True)
-                result["live"].update(
-                    pid=pid,
-                    running_executable=str(executable),
-                    restart_pending=executable
-                    != Path(info["managedCodexPath"]).resolve(),
-                )
+                executable = Path(process_identity(pid)["executable"])
+            elif profile == "macos":
+                from scripts.macos.restart_if_idle import running_executable
 
-        except (OSError, subprocess.SubprocessError, ValueError) as error:
-            result.setdefault("live", {})["error"] = str(error)
+                executable = running_executable(pid)
+            else:
+                executable = Path(f"/proc/{pid}/exe").resolve(strict=True)
+            result["live"].update(
+                pid=pid,
+                running_executable=str(executable),
+                restart_pending=executable != Path(info["managedCodexPath"]).resolve(),
+            )
+
+    except (OSError, subprocess.SubprocessError, ValueError) as error:
+        result.setdefault("live", {})["error"] = str(error)
     return result

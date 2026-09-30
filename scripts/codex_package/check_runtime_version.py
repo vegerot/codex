@@ -3,9 +3,10 @@
 import asyncio
 import json
 import os
-from pathlib import Path
+import sqlite3
 import sys
 import tempfile
+from pathlib import Path
 
 
 async def main():
@@ -54,6 +55,24 @@ async def main():
                 raise RuntimeError(
                     f"App Server advertises {actual!r}, package specifies {expected!r}"
                 )
+            if manifest["target"].endswith("windows-msvc"):
+                # Golden checksum from official Windows migration 1. Fresh-home
+                # initialization alone cannot detect compatibility with older DBs.
+                expected_checksum = bytes.fromhex(
+                    "54bbd6f47905a4e4c674034575963d82da7b534e66e9a37a81ec2afb6a4b56ce6"
+                    "de9b3ecf3032796a800f650239847d4"
+                )
+                database = sqlite3.connect(next(Path(directory).glob("state_*.sqlite")))
+                try:
+                    checksum = database.execute(
+                        "SELECT checksum FROM _sqlx_migrations WHERE version = 1"
+                    ).fetchone()[0]
+                finally:
+                    database.close()
+                if checksum != expected_checksum:
+                    raise RuntimeError(
+                        "Windows migration checksum differs from official CRLF builds"
+                    )
             print(f"App Server initialization verified package version {actual}")
         finally:
             if process.returncode is None:

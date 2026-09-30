@@ -62,7 +62,7 @@ when relocation/signing changes files. Compilation success alone is insufficient
 On Unix, select only a verified versioned package for CLI and managed daemon,
 discovering the daemon namespace. Under its install lock preserve settings,
 disable upstream automatic updates and remove stale latest-release markers.
-Record activation separately from the running daemon. Windows is build-only.
+Record activation separately from the running daemon. Windows activates the verified source CLI and its separate daemon; desktop packages, settings and app-owned processes remain untouched.
 
 Confirm HEAD still equals the tested SHA with no new tracked changes. Publish
 exactly that SHA with an explicit expected-tip lease:
