@@ -39,6 +39,36 @@ ConvertTo-Json $selected -Compress
     )
 
 
+def prune_packages(packages: Path, latest: Path) -> None:
+    """Keep the latest verified package and packages with running executables."""
+    running = json.loads(
+        subprocess.check_output(
+            [
+                "pwsh",
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                "$ErrorActionPreference = 'Stop'; ConvertTo-Json -Compress -InputObject @(Get-CimInstance Win32_Process | ForEach-Object { $_.ExecutablePath } | Where-Object { $_ })",
+            ],
+            text=True,
+        )
+    )
+    root = packages.resolve()
+    for package in packages.iterdir():
+        if not package.is_dir() or package == latest:
+            continue
+        assert not package.is_symlink() and package.resolve().parent == root
+        if any(Path(executable).is_relative_to(package) for executable in running):
+            continue
+        try:
+            shutil.rmtree(package)
+            print(f"Removed old package: {package}", flush=True)
+        except PermissionError:
+            # Windows may still hold a recently exited executable open. Retry
+            # this package after the next successful build.
+            print(f"Keeping locked package until the next build: {package}", flush=True)
+
+
 def build_windows(repo: Path, command: list[str], *, jobs: int) -> None:
     cache = Path.home() / ".cache/codex-windows-build"
     state = Path.home() / ".local/state/codex-windows-build"
@@ -182,4 +212,5 @@ def build_windows(repo: Path, command: list[str], *, jobs: int) -> None:
     info["package"] = str(destination)
     (run / "verified.json").write_text(json.dumps(info, indent=2))
     (state / "verified.json").write_text(json.dumps(info, indent=2))
+    prune_packages(packages, destination)
     print(json.dumps(info, indent=2), flush=True)
