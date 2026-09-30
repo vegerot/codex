@@ -66,7 +66,8 @@ Record activation separately from the running daemon. Native Mac/Windows desktop
 apps use their official bundled executables; preserve that selection and keep
 CODEX_CLI_PATH unset. Desktop SSH/Remote Control to devbox shares its source-built
 daemon. Personal Debian also keeps its desktop backend source-built. Windows
-nightly builds remain build-only.
+activates the verified source terminal CLI and its separate daemon; desktop
+packages, settings and app-owned processes remain untouched.
 
 Confirm HEAD still equals the tested SHA with no new tracked changes. Publish
 exactly that SHA with an explicit expected-tip lease:

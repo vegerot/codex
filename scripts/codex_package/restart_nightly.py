@@ -1,13 +1,14 @@
 """Bounded idle restart of the package recorded by a published Unix run."""
 
-from functools import partial
-import importlib.util
 import asyncio
+import importlib.util
 import json
 import shutil
 import subprocess
 import sys
 import time
+from contextlib import nullcontext
+from functools import partial
 from pathlib import Path
 
 from scripts.codex_package.nightly import ROOT, atomic_json, record_stage
@@ -15,8 +16,6 @@ from scripts.codex_package.nightly import ROOT, atomic_json, record_stage
 
 def require_published(run):
     record = json.loads((run / "run.json").read_text())
-    if record["profile"] == "windows":
-        raise RuntimeError("Windows restart is not requested")
     for stage in ("build", "verify", "activate", "publish"):
         if record["stages"][stage]["status"] != "success":
             raise RuntimeError(f"Restart requires successful {stage}")
@@ -46,8 +45,46 @@ def schedule(run):
         "--worker",
     ]
     try:
-        with (run / "restart.log").open("a") as log:
-            if sys.platform == "darwin":
+        log_context = (
+            nullcontext(None)
+            if sys.platform == "win32"
+            else (run / "restart.log").open("a")
+        )
+        with log_context as log:
+            if sys.platform == "win32":
+                from scripts.windows.activation import powershell
+
+                starter = run / "restart-worker.ps1"
+                invocation = "& " + " ".join(
+                    "'" + arg.replace("'", "''") + "'" for arg in command
+                )
+                starter.write_text(
+                    invocation
+                    + " *> '"
+                    + str(run / "restart.log").replace("'", "''")
+                    + "'\n"
+                )
+                launched = json.loads(
+                    powershell(
+                        "$startup = New-CimInstance Win32_ProcessStartup -ClientOnly -Property @{ShowWindow=[uint16]0}; "
+                        "$r = Invoke-CimMethod Win32_Process -MethodName Create -Arguments @{CommandLine=$env:NIGHTLY_COMMAND; ProcessStartupInformation=$startup}; "
+                        "$r | Select-Object ProcessId,ReturnValue | ConvertTo-Json -Compress",
+                        NIGHTLY_COMMAND=subprocess.list2cmdline(
+                            [
+                                shutil.which("pwsh"),
+                                "-NoProfile",
+                                "-WindowStyle",
+                                "Hidden",
+                                "-File",
+                                str(starter),
+                            ]
+                        ),
+                    )
+                )
+                if launched["ReturnValue"]:
+                    raise RuntimeError(f"Restart worker dispatch failed: {launched}")
+                result = {"worker_pid": launched["ProcessId"]}
+            elif sys.platform == "darwin":
                 process = subprocess.Popen(
                     command,
                     stdin=subprocess.DEVNULL,
@@ -85,12 +122,23 @@ def schedule(run):
 
 
 def finish(run, check=False):
-    import fcntl
+    from contextlib import contextmanager
 
     record = require_published(run)
     package = Path(record["stages"]["verify"]["package"])
-    with (run / "restart.lock").open("a") as lock:
-        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    if record["profile"] == "windows":
+        from scripts.windows.activation import lock_file
+    else:
+
+        @contextmanager
+        def lock_file(path):
+            import fcntl
+
+            with path.open("a") as lock:
+                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                yield
+
+    with lock_file(run / "restart.lock"):
         saved = run / "restart.json"
         if not check and saved.exists():
             previous = json.loads(saved.read_text())
@@ -99,7 +147,11 @@ def finish(run, check=False):
                 return previous
             shutil.copy2(saved, run / f"restart-attempt-{time.time_ns()}.json")
         deadline = time.monotonic() + 1800
-        if record["profile"] == "macos":
+        if record["profile"] == "windows":
+            from scripts.windows.activation import restart
+
+            action = partial(restart, package, check_only=check, deadline=deadline)
+        elif record["profile"] == "macos":
             from scripts.macos.restart_if_idle import restart
 
             action = partial(restart, package, check_only=check, deadline=deadline)
@@ -128,6 +180,8 @@ def finish(run, check=False):
 
 
 def report_result(run, record, result):
+    if record["profile"] == "windows":
+        return
     thread = record.get("coordinator_thread")
     if not thread:
         return
