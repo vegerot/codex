@@ -1,3 +1,13 @@
 codex-rs/app-server-protocol/schema/** linguist-generated
 codex-rs/hooks/schema/generated/** linguist-generated
 third_party/voice/sources.json text eol=lf
+
+# Formatters write LF on every platform; keep checkout and index expectations aligned.
+BUILD text eol=lf
+WORKSPACE text eol=lf
+*.bazel text eol=lf
+*.bzl text eol=lf
+*.sky text eol=lf
+*.bzl.* text eol=lf
+*.sky.* text eol=lf
+justfile text eol=lf

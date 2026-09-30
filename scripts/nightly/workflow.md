@@ -12,6 +12,14 @@ resolved CLI path/version/features, and clean tracked status. Stop for unrelated
 tracked edits or unfinished operations. Resume an automation-owned rebase only
 when its run evidence proves ownership, original tips, and pending changes.
 
+On Windows, formatter output can leave stale CRLF-sized index entries that report
+modifications even when the diff is empty. An empty diff alone is not proof: compare
+every reported file byte-for-byte with its committed blob and save the evidence.
+Only for proven identical files, refresh those exact Git index entries with
+`git add -- <paths>`; require an empty staged diff and clean tracked status afterward.
+Never restore files or normalize real edits to pass preflight. Formatter-managed
+Bazel/Starlark files and justfile have explicit LF attributes to prevent recurrence.
+
 1. Verify default points to vegerot/codex and upstream to openai/codex. Pull
    `sl pull default --bookmark fork`; freeze the full fetched origin/fork SHA.
    This is the expected publication tip, not a moving bookmark.
