@@ -57,7 +57,10 @@ or which scheduled tasks are enabled.
 - **Native Windows builds:** `build.py` selects a Windows backend that packages
   committed source, records CPU/memory usage, and verifies the CLI, Code Mode,
   App Server, and sandbox helpers before saving a package and receipt. After
-  verification, removes older Windows packages except those still running.
+  verification, removes older Windows packages except the selected CLI and those
+  still running. Migration files use CRLF to preserve official Windows database
+  checksums, with a verification regression gate. Verified packages replace the
+  separate CLI/daemon and cut over when idle; desktop runtime files stay official.
   [Details](scripts/windows/README.md)
 - **Source-build instructions:** use package assembly to fetch matching V8
   artifacts and launch the packaged executable. [Guide](docs/install.md)
@@ -66,7 +69,8 @@ or which scheduled tasks are enabled.
   procedure, committed helper snapshots, complete packages, and separate build,
   verification, activation, publication and restart records. Unix restarts wait
   for idle after publication and leave unmanaged App Servers untouched; Windows
-  remains build-only. A host-local status
+  selects its source CLI and separate daemon while leaving the official desktop
+  runtime unchanged. A host-local status
   command reports selected and running packages. [Operations](scripts/nightly/README.md)
 
 ## Keeping this list current

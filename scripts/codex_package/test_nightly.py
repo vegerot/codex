@@ -45,7 +45,7 @@ class RunTests(unittest.TestCase):
                 record_stage(run, stage, "success")
             self.assertEqual(require_published(run)["profile"], "devbox")
 
-    def test_windows_does_not_request_activation_or_restart(self):
+    def test_windows_requests_activation_and_idle_restart(self):
         with (
             tempfile.TemporaryDirectory() as temporary,
             patch(
@@ -55,8 +55,8 @@ class RunTests(unittest.TestCase):
         ):
             run = initialize("windows", state=Path(temporary))
             record = json.loads((run / "run.json").read_text())
-            self.assertEqual(record["stages"]["activate"], {"status": "not_requested"})
-            with self.assertRaisesRegex(RuntimeError, "Windows"):
+            self.assertEqual(record["stages"]["activate"], {"status": "pending"})
+            with self.assertRaisesRegex(RuntimeError, "build"):
                 require_published(run)
 
 

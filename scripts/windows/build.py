@@ -6,8 +6,9 @@ import shutil
 import subprocess
 import sys
 import time
-import tomllib
 from pathlib import Path
+
+import tomllib
 
 from scripts.codex_package.layout import build_package_dir
 from scripts.codex_package.nightly_version import stamp_nightly_version
@@ -55,7 +56,11 @@ def prune_packages(packages: Path, latest: Path) -> None:
     )
     root = packages.resolve()
     for package in packages.iterdir():
-        if not package.is_dir() or package == latest:
+        if (
+            not package.is_dir()
+            or package == latest
+            or package.resolve() == (packages.parent / "current").resolve()
+        ):
             continue
         assert not package.is_symlink() and package.resolve().parent == root
         if any(Path(executable).is_relative_to(package) for executable in running):
@@ -67,6 +72,15 @@ def prune_packages(packages: Path, latest: Path) -> None:
             # Windows may still hold a recently exited executable open. Retry
             # this package after the next successful build.
             print(f"Keeping locked package until the next build: {package}", flush=True)
+
+
+def prepare_migrations(source: Path) -> None:
+    """Match the CRLF migration checksums embedded in official Windows builds."""
+    for path in (source / "codex-rs/state").glob("*migrations/*.sql"):
+        original = path.read_bytes()
+        windows = original.replace(b"\r\n", b"\n").replace(b"\n", b"\r\n")
+        if windows != original:
+            path.write_bytes(windows)
 
 
 def build_windows(repo: Path, command: list[str], *, jobs: int) -> None:
@@ -83,6 +97,7 @@ def build_windows(repo: Path, command: list[str], *, jobs: int) -> None:
         flush=True,
     )
     source = repo
+    prepare_migrations(source)
     version = stamp_nightly_version(source, commit)
     spec = TARGET_SPECS["x86_64-pc-windows-msvc"]
     toolchain = tomllib.loads((source / "codex-rs/rust-toolchain.toml").read_text())[
@@ -203,8 +218,8 @@ def build_windows(repo: Path, command: list[str], *, jobs: int) -> None:
     )
     for name in ("LICENSE", "NOTICE"):
         shutil.copy2(source / name, package / name)
-    from scripts.codex_package.verify_nightly import verify_run
     from scripts.codex_package.nightly import record_stage
+    from scripts.codex_package.verify_nightly import verify_run
 
     (package / "build-info.json").write_text(json.dumps(info, indent=2))
     record_stage(run, "build", "success", evidence=info)

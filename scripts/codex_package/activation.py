@@ -1,13 +1,14 @@
 """Unix package selection under the managed daemon install lock."""
 
-import fcntl
 import json
 import os
-from pathlib import Path
 import subprocess
+from pathlib import Path
 
 
 def select_package(package, current, launchers, settings_file):
+    import fcntl
+
     links = {current: package}
     links.update(
         {
@@ -48,7 +49,9 @@ def activate_verified(run):
 
     record = json.loads((run / "run.json").read_text())
     if record["profile"] == "windows":
-        raise RuntimeError("Windows activation is not requested")
+        from scripts.windows.activation import activate
+
+        return activate(run)
     verified = record["stages"]["verify"]
     if verified["status"] != "success":
         raise RuntimeError("Activation requires successful package verification")
