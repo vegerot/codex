@@ -49,25 +49,46 @@ class ActivationTests(unittest.TestCase):
             with self.subTest(profile=profile):
                 run = self.home / profile
                 run.mkdir()
-                (run / "run.json").write_text(json.dumps({
-                    "profile": profile,
-                    "stages": {"verify": {"status": "success",
-                        "package": str(self.package), "hashes": {"codex": "verified"}}},
-                }))
+                (run / "run.json").write_text(
+                    json.dumps(
+                        {
+                            "profile": profile,
+                            "stages": {
+                                "verify": {
+                                    "status": "success",
+                                    "package": str(self.package),
+                                    "hashes": {"codex": "verified"},
+                                }
+                            },
+                        }
+                    )
+                )
                 with (
                     patch("pathlib.Path.home", return_value=self.home),
                     patch.dict("os.environ", {"CODEX_HOME": str(self.home)}),
-                    patch("scripts.codex_package.verify_nightly.hashes",
-                          return_value={"codex": "verified"}),
-                    patch("scripts.codex_package.activation.subprocess.check_output",
-                          return_value=json.dumps({"managedCodexPath": str(self.current / "bin/codex")})),
+                    patch(
+                        "scripts.codex_package.verify_nightly.hashes",
+                        return_value={"codex": "verified"},
+                    ),
+                    patch(
+                        "scripts.codex_package.activation.subprocess.check_output",
+                        return_value=json.dumps(
+                            {"managedCodexPath": str(self.current / "bin/codex")}
+                        ),
+                    ),
                 ):
                     result = activate_verified(run)
                 self.assertEqual(self.current.resolve(), self.package)
-                self.assertEqual((self.home / ".local/bin/codex").resolve(),
-                                 self.current.resolve() / "bin/codex")
+                self.assertEqual(
+                    (self.home / ".local/bin/codex").resolve(),
+                    self.current.resolve() / "bin/codex",
+                )
                 self.assertEqual(result["restart"], "pending")
-                self.assertFalse(json.loads(self.settings.read_text())["updater"]["autoUpdateEnabled"])
+                self.assertFalse(
+                    json.loads(self.settings.read_text())["updater"][
+                        "autoUpdateEnabled"
+                    ]
+                )
 
     def test_preserves_other_settings(self):
         self.settings.parent.mkdir()
