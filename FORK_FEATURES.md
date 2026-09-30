@@ -65,6 +65,11 @@ or which scheduled tasks are enabled.
 - **Source-build instructions:** use package assembly to fetch matching V8
   artifacts and launch the packaged executable. [Guide](docs/install.md)
 
+- **Consistent formatter line endings:** Bazel/Starlark files and justfile use
+  explicit LF attributes, preventing Windows CRLF checkout sizes from producing
+  false modified status after formatting. Nightly preflight can refresh index
+  entries only after proving the affected files equal committed bytes.
+  [Attributes](.gitattributes) · [Procedure](scripts/nightly/workflow.md)
 - **Shared nightly workflow:** four platform profiles use one missing-patch replay
   procedure, committed helper snapshots, complete packages, and separate build,
   verification, activation, publication and restart records. Unix restarts wait
