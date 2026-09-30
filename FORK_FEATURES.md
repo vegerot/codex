@@ -54,7 +54,8 @@ or which scheduled tasks are enabled.
   [Details](scripts/devbox/README.md)
 - **Native Windows builds:** `build.py` selects a Windows backend that packages
   committed source, records CPU/memory usage, and verifies the CLI, Code Mode,
-  App Server, and sandbox helpers before saving a package and receipt.
+  App Server, and sandbox helpers before saving a package and receipt. After
+  verification, removes older Windows packages except those still running.
   [Details](scripts/windows/README.md)
 - **Source-build instructions:** use package assembly to fetch matching V8
   artifacts and launch the packaged executable. [Guide](docs/install.md)
