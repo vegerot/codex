@@ -40,6 +40,7 @@ or which scheduled tasks are enabled.
   Linux includes bubblewrap and memory-aware build concurrency.
 - **SCM build-service packages:** versioned Linux packages and cross-compiled
   Apple Silicon macOS packages, with exact-source verification/install helpers.
+  Linux uses Offline versions and macOS uses Test versions to separate build timings.
   Linux includes bubblewrap; macOS includes a matching voice host/runtime,
   library relocation/signing, and VPN-aware backend selection. SCM version stamping
   accepts a stable release tag resolved by the authenticated submitter, so workers

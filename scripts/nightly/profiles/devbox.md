@@ -7,7 +7,8 @@ helper tests are local; validate compiled artifacts from SCM.
 Push the frozen SHA to the existing Codebase mirror's immutable
 codex/builds/<SHA> ref. SCM repository max/coplan/codex, ID 591837, offline x86_64,
 build-scm.sh, existing rust.compile.lyra image. Query versions by exact commit
-before submitting; reuse matching successful builds or wait for running ones.
+before submitting; reuse matching successful Offline builds or wait for matching
+running Offline builds.
 Use `bytedcli --json scm repo build --repo-id 591837 --commit <SHA> --type offline
 --arch x86_64`. Poll every 30–60 seconds and save version ID and logs.
 Before submission, use authenticated GitHub access on the submitter to list

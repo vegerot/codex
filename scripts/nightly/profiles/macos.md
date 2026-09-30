@@ -8,9 +8,13 @@ Recheck before submission/download if connectivity changes.
 
 SCM repository 591837, existing Codebase mirror, immutable codex/macos-builds/<SHA>
 ref. Resolve the latest stable upstream base version before submission. Submit
-with CUSTOM_CODEX_TARGET=aarch64-apple-darwin and CUSTOM_CODEX_BASE_VERSION set;
+with `bytedcli --json scm repo build --repo-id 591837 --commit <SHA> --type test
+--arch x86_64`, with CUSTOM_CODEX_TARGET=aarch64-apple-darwin and
+CUSTOM_CODEX_BASE_VERSION set;
 SCM's x86_64 slot describes the worker, not the package target. Reuse only artifacts
-matching exact SHA, target and version. Keep build-scm.sh and build-scm-macos.py.
+matching exact SHA, target, version and Test version type. macOS uses Test and
+Linux uses Offline so SCM build analysis can filter their durations separately.
+Keep build-scm.sh and build-scm-macos.py.
 Use scripts/macos/install_scm.py for acquisition, voice relocation and signing.
 Verify voice manifest, signatures, CLI/host/voice source agreement and App Server.
 Restart only after validation and publication, independently of the nightly task.
