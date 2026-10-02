@@ -52,3 +52,10 @@ See [desktop and CLI backend selection](desktop-backends.md) for the native
 desktop versus remote-host distinction. Reload systemd after unit changes and
 inspect its next trigger. Validate Debian on native Debian, not WSL; keep native
 desktop runtimes separate from source CLI activation on Windows.
+
+## Main branch invariant
+
+Every nightly must make vegerot/codex main identical to openai/codex main by
+full commit SHA. Do not merge or retain fork-only CI/customization commits on
+main; those belong on fork. Use the captured-tip lease and remote equality check
+in workflow.md, accounting for each host's different remote aliases.
