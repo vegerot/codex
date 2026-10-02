@@ -37,9 +37,21 @@ Bazel/Starlark files and justfile have explicit LF attributes to prevent recurre
    Replay only explicitly selected missing revisions, in dependency order, with
    `sl rebase --rev <selected-revset> --dest <frozen-tip> --tool internal:fail`.
    Never use blanket `sl rebase --base .`. If none remain, `sl goto <frozen-tip>`.
-5. Pull upstream/main, synchronize the fork main bookmark, then use the same
-   equivalence procedure to select surviving fork patches for upstream replay.
-   Preserve source dates using the existing Sapling configuration.
+5. Pull upstream/main. **The fork's main must point to exactly the same commit
+   SHA as upstream/main on every nightly run.** This is an exact mirror, not a
+   merge or a tree-equivalence check. Resolve repositories by URL: the fork is
+   vegerot/codex and upstream is openai/codex; local remote aliases vary by host.
+   Capture both main SHAs. If they differ, set the fork's main directly to the
+   fetched upstream SHA with an explicit expected-tip lease:
+   `git push --force-with-lease=refs/heads/main:<captured-fork-main-SHA> <verified-fork-URL> <fetched-upstream-main-SHA>:refs/heads/main`.
+   Never merge fork-only commits into main or preserve CI/customization commits
+   there. Fork-specific changes belong on fork. The patch-preservation rules
+   above apply to fork, not to main. If the lease fails, reread both remote refs
+   and reconcile the mirror again; never use an unconditional force push.
+   Verify and record that both remote main refs have the identical full SHA;
+   reread upstream if it advances during synchronization. Then use the same
+   patch-equivalence procedure to select surviving fork patches for replay onto
+   upstream. Preserve source dates using the existing Sapling configuration.
 
 Resolve routine conflicts autonomously by reading base, both sides, original
 patches, callers and tests. Preserve both feature sets. Do not preapply later

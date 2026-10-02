@@ -77,7 +77,9 @@ or which scheduled tasks are enabled.
   for idle after publication and leave unmanaged App Servers untouched; Windows
   selects its source CLI and separate daemon while leaving the official desktop
   runtime unchanged. A host-local status
-  command reports selected and running packages. [Operations](scripts/nightly/README.md)
+  command reports selected and running packages. Every nightly mirrors upstream
+  main by exact commit SHA; fork-only changes stay on fork, never main.
+  [Operations](scripts/nightly/README.md)
 
 ## Keeping this list current
 
