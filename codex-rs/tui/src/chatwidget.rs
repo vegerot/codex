@@ -2036,7 +2036,6 @@ impl ChatWidget {
     pub(crate) fn status_line_text(&self) -> Option<String> {
         self.bottom_pane.status_line_text()
     }
-
 }
 
 fn has_websocket_timing_metrics(summary: RuntimeMetricsSummary) -> bool {
