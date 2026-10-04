@@ -3,8 +3,8 @@
 Brief inventory of the current fork’s behavior changes and build tooling. Related
 fixes are grouped together rather than listed once per commit.
 
-Runtime inventory reviewed 2026-10-01 against `upstream/main`
-(`dd90f160ed9b`); build workflows include the shared-nightly refactor and detached
+Runtime inventory reviewed 2026-10-04 against `upstream/main`
+(`afb436df8b70`); build workflows include the shared-nightly refactor and detached
 Linux finisher. This describes source changes, not which version is installed
 or which scheduled tasks are enabled.
 
